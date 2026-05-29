@@ -1,0 +1,32 @@
+#module #store #sqlite
+
+> SQLite-backed graph store with notes, tags, and edges tables.
+
+eshp_store.py — SQLite-backed graph store.
+
+Three tables:
+  notes(slug PK, desc, body, updated_at)
+  tags(slug, tag)                    -- # stripped at parse time
+  edges(src, rel, dst)               -- directed: src -[rel]-> dst
+
+Key methods:
+  sync(verbose)        — full scan of eshp/ dir, upserts all notes, removes stale
+  upsert_note(note)    — replaces tags+edges for a slug, then re-inserts
+  delete_note(slug)    — removes from all three tables
+  search(query, tags)  — LIKE scan on body+slug, optional tag filter
+  get_note(slug)       — returns note + edges_out + edges_in
+  get_descs(slugs)     — returns {slug: desc} for bulk lookups (used by CLI)
+  neighbours(slug, rel, depth) — BFS over edge table
+  list_by_tag(tag) / all_tags() / stats()
+
+IMPORTANT: EshpStore does NOT auto-commit. Always call store.conn.commit()
+after upsert_note() / delete_note() in tests and production code.
+Always call store.close() when finished.
+
+DB file lives at: <eshp_root>/.eshp.db
+
+.part-of
+-> architecture
+
+.depends-on
+-> edge-direction

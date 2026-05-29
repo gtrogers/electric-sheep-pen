@@ -1,0 +1,30 @@
+#module #cli #watch
+
+> Click CLI and watchdog file watcher. Entry point for all user-facing commands.
+
+eshp_cli.py — Click CLI and watchdog file watcher.
+
+find_eshp_root() — walks up from cwd looking for an eshp/ directory.
+  Falls back to creating ./eshp if none found.
+
+EshpHandler (watchdog FileSystemEventHandler)
+  on_created / on_modified → upsert_note + commit
+  on_deleted               → delete_note + commit
+  Only processes .eshp suffix files.
+
+Commands:
+  watch               full sync on startup, then watches for file changes
+  new <slug>          creates skeleton note, opens $EDITOR, syncs on exit
+  show <slug>         body + tags + outgoing/incoming edges
+  search <query>      LIKE search, optional --tag filter
+  tags                all tags with counts (bar chart)
+  tag <tagname>       notes carrying a tag
+  graph <slug>        BFS neighbourhood, --depth, --rel filter
+  stats               note/tag/edge counts
+
+.part-of
+-> architecture
+
+.depends-on
+-> store
+-> parser

@@ -1,0 +1,28 @@
+#module #parser
+
+> Pure parse/render layer for .eshp files. No I/O side effects beyond reading.
+
+eshp_parser.py — pure parse/render layer.
+
+parse_eshp(path: Path) -> EshpNote
+  Reads a .eshp file and returns a dataclass with: slug, tags, desc, body, relationships.
+  No writes, no DB access.
+
+render_eshp(note: EshpNote) -> str
+  Serialises an EshpNote back to .eshp format. Used by `eshp new`.
+
+Key types:
+  EshpNote   — path, slug, tags: list[str], desc: str, body: str, relationships: dict[str, Relationship]
+  Relationship — name, outgoing: list[str], incoming: list[str]
+
+  note.all_outgoing  → [(rel_name, target_slug), ...]
+  note.all_incoming  → [(rel_name, source_slug), ...]  (the <- edges)
+
+Tags are stored WITHOUT the # prefix everywhere except the raw file.
+Slug is always path.stem — the filename without .eshp extension.
+Desc is the > line in the file (stripped of the > prefix and whitespace).
+Escape: a line starting with \ strips the \ and treats the rest as literal body text.
+render_eshp() uses _escape_body() to automatically escape body lines starting with \, ., or >.
+
+.part-of
+-> architecture

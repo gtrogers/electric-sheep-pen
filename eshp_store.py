@@ -28,6 +28,7 @@ class EshpStore:
         self.conn.executescript("""
             CREATE TABLE IF NOT EXISTS notes (
                 slug TEXT PRIMARY KEY,
+                desc TEXT DEFAULT '',
                 body TEXT,
                 updated_at TEXT DEFAULT (datetime('now'))
             );
@@ -46,6 +47,11 @@ class EshpStore:
             CREATE INDEX IF NOT EXISTS idx_edges_src ON edges(src);
             CREATE INDEX IF NOT EXISTS idx_edges_dst ON edges(dst);
         """)
+        # Migrate existing DBs that predate the desc column
+        try:
+            self.conn.execute("ALTER TABLE notes ADD COLUMN desc TEXT DEFAULT ''")
+        except Exception:
+            pass
         self.conn.commit()
 
     # ------------------------------------------------------------------ sync
@@ -75,9 +81,9 @@ class EshpStore:
     def upsert_note(self, note: EshpNote):
         c = self.conn
         c.execute(
-            "INSERT INTO notes(slug, body, updated_at) VALUES(?,?,datetime('now')) "
-            "ON CONFLICT(slug) DO UPDATE SET body=excluded.body, updated_at=excluded.updated_at",
-            (note.slug, note.body),
+            "INSERT INTO notes(slug, desc, body, updated_at) VALUES(?,?,?,datetime('now')) "
+            "ON CONFLICT(slug) DO UPDATE SET desc=excluded.desc, body=excluded.body, updated_at=excluded.updated_at",
+            (note.slug, note.desc, note.body),
         )
         c.execute("DELETE FROM tags  WHERE slug=?", (note.slug,))
         c.execute("DELETE FROM edges WHERE src=?",  (note.slug,))
@@ -107,7 +113,7 @@ class EshpStore:
     def search(self, query: str, tags: Optional[list[str]] = None, limit: int = 10) -> list[dict]:
         """Full-text search over body + slug, optionally filtered by tags."""
         base_sql = """
-            SELECT DISTINCT n.slug, n.body,
+            SELECT DISTINCT n.slug, n.desc, n.body,
                    group_concat(t.tag, ' ') AS tags
             FROM notes n
             LEFT JOIN tags t ON t.slug = n.slug
@@ -128,7 +134,7 @@ class EshpStore:
 
     def get_note(self, slug: str) -> Optional[dict]:
         row = self.conn.execute(
-            "SELECT n.slug, n.body, group_concat(t.tag,' ') AS tags "
+            "SELECT n.slug, n.desc, n.body, group_concat(t.tag,' ') AS tags "
             "FROM notes n LEFT JOIN tags t ON t.slug=n.slug "
             "WHERE n.slug=? GROUP BY n.slug",
             (slug,),
@@ -175,6 +181,16 @@ class EshpStore:
             frontier = next_frontier
 
         return edges_found
+
+    def get_descs(self, slugs: list[str]) -> dict[str, str]:
+        """Return {slug: desc} for the given slugs (missing slugs are omitted)."""
+        if not slugs:
+            return {}
+        placeholders = ",".join("?" * len(slugs))
+        rows = self.conn.execute(
+            f"SELECT slug, desc FROM notes WHERE slug IN ({placeholders})", slugs
+        )
+        return {r["slug"]: r["desc"] for r in rows}
 
     def list_by_tag(self, tag: str) -> list[str]:
         return [

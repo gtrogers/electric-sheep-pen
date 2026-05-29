@@ -1,0 +1,24 @@
+#design #edges
+
+> <- in a file = forward edge in DB; src always points to dst regardless of declaration side.
+
+Edge direction convention — critical to understand before touching store or parser.
+
+In a .eshp FILE:
+  -> target   means this note points TO target   (outgoing)
+  <- source   means source points TO this note   (incoming / reverse declaration)
+
+In the SQLITE edges table:
+  ALL edges are stored as (src, rel, dst) — always forward direction.
+
+So a <- source line in note X is stored as: INSERT INTO edges(src=source, rel=..., dst=X)
+This means you can declare a relationship from either side of the link,
+but the DB always represents it as src → dst.
+
+upsert_note() only deletes edges WHERE src=slug before re-inserting.
+It does NOT delete edges pointed at this note from other notes.
+Edges declared via <- in this file ARE re-inserted as forward edges during upsert.
+
+.related
+-> store
+-> parser

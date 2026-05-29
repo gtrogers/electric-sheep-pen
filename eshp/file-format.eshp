@@ -1,0 +1,39 @@
+#format #spec
+
+> The .eshp file format specification.
+
+The .eshp file format.
+
+  #tag1 #tag2
+
+  \> Short one-line description shown whenever this note is referenced.
+
+  Free text body — prose, decisions, context, warnings.
+
+  \.relationship-name
+  -> target-slug
+  <- source-slug
+
+  \.another-rel
+  -> other-slug
+
+Rules:
+- First non-empty line(s) that consist only of #tokens → tag line(s)
+- Blank line after tags ends the tag section; body begins
+- A line starting with > is the description (stripped, stored as desc field)
+- A line starting with . (but not ..) opens a named relationship block
+- -> lines inside a rel block = outgoing edges
+- <- lines inside a rel block = incoming edges (stored reversed in DB)
+- A blank line ends a relationship block; content after goes back to body
+- Slugs are kebab-case; the filename without .eshp is the slug
+- Tags: # prefix only in file, stripped everywhere else (DB, EshpNote.tags)
+- Desc: > prefix only in file, stripped everywhere else (DB, EshpNote.desc)
+- Escape: \ at start of a (stripped) line removes its special meaning
+    \.foo  → body text starting with .  (not a relationship header)
+    \>     → body text starting with >  (not a description)
+    \\     → body text starting with \
+- render_eshp() is the canonical serialiser — use it, don't hand-roll
+
+.related
+-> parser
+-> edge-direction

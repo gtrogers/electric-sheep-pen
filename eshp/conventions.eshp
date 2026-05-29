@@ -1,0 +1,24 @@
+#conventions #dev
+
+> TDD, self-hosting, and commit conventions for this project.
+
+Development conventions for this project.
+
+TDD — write a failing test that captures the assumption first, then write code.
+Tests are grouped into classes by method/feature (e.g. TestParseTags, TestUpsertNote).
+Use tmp_path for file isolation. store + memo_dir fixtures in test_store.py are canonical.
+
+Self-hosting — use eshp itself during development to record decisions and context.
+The eshp/ folder in this repo IS the project memory graph.
+
+Commit convention — EshpStore does not auto-commit.
+Always call store.conn.commit() after mutations.
+Always call store.close() when done.
+
+Slugs — kebab-case filenames without the .eshp extension. path.stem everywhere.
+
+Tags — no # prefix in DB or EshpNote.tags. Only present in raw file text.
+
+.related
+-> architecture
+-> dev-workflow

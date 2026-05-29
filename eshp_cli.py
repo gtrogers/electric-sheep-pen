@@ -48,14 +48,20 @@ def get_store(root: Optional[Path] = None) -> EshpStore:
 
 # ──────────────────────────────────────────────────────────────────── helpers
 
-def _note_header(slug: str, tags: str) -> str:
+def _note_header(slug: str, tags: str, desc: str = "") -> str:
     tag_str = f"  [{tags}]" if tags else ""
-    return f"{click.style(slug, fg='cyan', bold=True)}{click.style(tag_str, fg='yellow')}"
+    header = f"{click.style(slug, fg='cyan', bold=True)}{click.style(tag_str, fg='yellow')}"
+    if desc:
+        header += f"\n  {click.style(desc, fg='white', dim=True)}"
+    return header
 
 
-def _edge_line(direction: str, rel: str, node: str) -> str:
+def _edge_line(direction: str, rel: str, node: str, desc: str = "") -> str:
     arrow = click.style("->", fg="green") if direction == "out" else click.style("<-", fg="magenta")
-    return f"  {arrow} {click.style(rel, fg='blue')} {click.style(node, fg='cyan')}"
+    node_str = click.style(node, fg="cyan")
+    if desc:
+        node_str += f"  {click.style(desc, fg='white', dim=True)}"
+    return f"  {arrow} {click.style(rel, fg='blue')} {node_str}"
 
 
 def _open_in_editor(path: Path):
@@ -165,7 +171,7 @@ def new(slug, tags, root):
         return
 
     tag_list = [t.strip() for t in tags.split(",") if t.strip()]
-    note = EshpNote(path=path, slug=slug, tags=tag_list, body="", relationships={})
+    note = EshpNote(path=path, slug=slug, tags=tag_list, desc="", body="", relationships={})
     path.write_text(render_eshp(note), encoding="utf-8")
 
     click.echo(click.style(f"→ {path}", dim=True))
@@ -182,14 +188,14 @@ def show(slug, root):
     """Show a note and its graph edges."""
     store = get_store(Path(root) if root else None)
     note = store.get_note(slug)
-    store.close()
 
     if not note:
+        store.close()
         click.echo(click.style(f"Note '{slug}' not found. Is `eshp watch` running?", fg="red"))
         sys.exit(1)
 
     click.echo()
-    click.echo(_note_header(note["slug"], note["tags"] or ""))
+    click.echo(_note_header(note["slug"], note["tags"] or "", note.get("desc", "")))
     click.echo()
 
     if note["body"]:
@@ -197,16 +203,22 @@ def show(slug, root):
         click.echo()
 
     if note["edges_out"]:
+        out_slugs = [e["dst"] for e in note["edges_out"]]
+        descs = store.get_descs(out_slugs)
         click.echo(click.style("Outgoing:", fg="white", bold=True))
         for e in note["edges_out"]:
-            click.echo(_edge_line("out", e["rel"], e["dst"]))
+            click.echo(_edge_line("out", e["rel"], e["dst"], descs.get(e["dst"], "")))
         click.echo()
 
     if note["edges_in"]:
+        in_slugs = [e["src"] for e in note["edges_in"]]
+        descs = store.get_descs(in_slugs)
         click.echo(click.style("Incoming:", fg="white", bold=True))
         for e in note["edges_in"]:
-            click.echo(_edge_line("in", e["rel"], e["src"]))
+            click.echo(_edge_line("in", e["rel"], e["src"], descs.get(e["src"], "")))
         click.echo()
+
+    store.close()
 
 
 @cli.command()
@@ -226,7 +238,7 @@ def search(query, tag, limit, root):
 
     click.echo()
     for r in results:
-        click.echo(_note_header(r["slug"], r["tags"] or ""))
+        click.echo(_note_header(r["slug"], r["tags"] or "", r.get("desc", "")))
         if r["body"]:
             preview = r["body"][:120].replace("\n", " ")
             if len(r["body"]) > 120:
@@ -262,16 +274,23 @@ def tag(tagname, root):
     tagname = tagname.lstrip("#")
     store = get_store(Path(root) if root else None)
     slugs = store.list_by_tag(tagname)
-    store.close()
 
     if not slugs:
+        store.close()
         click.echo(f"No notes tagged #{tagname}.")
         return
+
+    descs = store.get_descs(slugs)
+    store.close()
 
     click.echo()
     click.echo(click.style(f"#{tagname}", fg="yellow", bold=True) + f"  ({len(slugs)} notes)")
     for s in slugs:
-        click.echo(f"  {click.style(s, fg='cyan')}")
+        desc = descs.get(s, "")
+        line = f"  {click.style(s, fg='cyan')}"
+        if desc:
+            line += f"  {click.style(desc, fg='white', dim=True)}"
+        click.echo(line)
     click.echo()
 
 
@@ -291,25 +310,32 @@ def graph(slug, depth, rel, root):
         sys.exit(1)
 
     edges = store.neighbours(slug, rel=rel, depth=depth)
-    store.close()
 
     if not edges:
+        store.close()
         click.echo(f"No edges found for '{slug}'.")
         return
-
-    click.echo()
-    click.echo(click.style(f"Graph around: {slug}", bold=True) + f"  (depth={depth})")
-    click.echo()
 
     nodes = set()
     for e in edges:
         nodes.add(e["src"])
         nodes.add(e["dst"])
 
+    descs = store.get_descs(list(nodes))
+    store.close()
+
+    click.echo()
+    click.echo(click.style(f"Graph around: {slug}", bold=True) + f"  (depth={depth})")
+    click.echo()
+
     for e in edges:
-        src = click.style(e["src"], fg="cyan", bold=(e["src"] == slug))
+        src_desc = descs.get(e["src"], "")
+        dst_desc = descs.get(e["dst"], "")
+        src_label = e["src"] + (f" ({src_desc})" if src_desc and e["src"] != slug else "")
+        dst_label = e["dst"] + (f" ({dst_desc})" if dst_desc and e["dst"] != slug else "")
+        src = click.style(src_label, fg="cyan", bold=(e["src"] == slug))
         rel_label = click.style(e["rel"], fg="blue")
-        dst = click.style(e["dst"], fg="cyan", bold=(e["dst"] == slug))
+        dst = click.style(dst_label, fg="cyan", bold=(e["dst"] == slug))
         click.echo(f"  {src}  --[{rel_label}]-->  {dst}")
 
     click.echo()

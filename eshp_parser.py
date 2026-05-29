@@ -35,6 +35,7 @@ class EshpNote:
     tags: list[str]
     body: str
     relationships: dict[str, Relationship]  # name -> Relationship
+    desc: str = ""     # short one-line description shown in references
 
     @property
     def all_outgoing(self) -> list[tuple[str, str]]:
@@ -60,6 +61,7 @@ def parse_eshp(path: Path) -> EshpNote:
     lines = text.splitlines()
 
     tags: list[str] = []
+    desc: str = ""
     body_lines: list[str] = []
     relationships: dict[str, Relationship] = {}
     current_rel: Optional[Relationship] = None
@@ -83,6 +85,17 @@ def parse_eshp(path: Path) -> EshpNote:
             else:
                 tag_section_done = True
                 # Fall through to body/rel handling
+
+        # Escape: backslash at start of line removes special meaning for next char
+        if stripped.startswith("\\"):
+            indent = len(line) - len(line.lstrip())
+            body_lines.append(line[:indent] + line[indent + 1:])
+            continue
+
+        # Description line: starts with ">"
+        if stripped.startswith(">"):
+            desc = stripped[1:].strip()
+            continue
 
         # Relationship section header
         if stripped.startswith(".") and not stripped.startswith(".."):
@@ -121,9 +134,25 @@ def parse_eshp(path: Path) -> EshpNote:
         path=path,
         slug=slug,
         tags=tags,
+        desc=desc,
         body=body,
         relationships=relationships,
     )
+
+
+_BODY_ESCAPE_PREFIXES = ("\\", ".", ">")
+
+
+def _escape_body(body: str) -> str:
+    """Prefix body lines that start with syntax-significant characters."""
+    result = []
+    for line in body.split("\n"):
+        stripped = line.lstrip()
+        if stripped.startswith(_BODY_ESCAPE_PREFIXES) and not stripped.startswith(".."):
+            indent = len(line) - len(stripped)
+            line = line[:indent] + "\\" + stripped
+        result.append(line)
+    return "\n".join(result)
 
 
 def render_eshp(note: EshpNote) -> str:
@@ -134,8 +163,12 @@ def render_eshp(note: EshpNote) -> str:
         parts.append(" ".join(f"#{t}" for t in note.tags))
         parts.append("")
 
+    if note.desc:
+        parts.append(f"> {note.desc}")
+        parts.append("")
+
     if note.body:
-        parts.append(note.body)
+        parts.append(_escape_body(note.body))
         parts.append("")
 
     for rel in note.relationships.values():

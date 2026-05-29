@@ -40,6 +40,47 @@ class TestParseTags:
         assert all(not t.startswith("#") for t in note.tags)
 
 
+class TestParseDesc:
+    def test_desc_parsed(self, tmp_path):
+        path = write_memo(tmp_path, "note", """\
+            #service
+
+            > Handles authentication for all users.
+
+            Longer body here.
+        """)
+        note = parse_eshp(path)
+        assert note.desc == "Handles authentication for all users."
+
+    def test_desc_not_in_body(self, tmp_path):
+        path = write_memo(tmp_path, "note", """\
+            #service
+
+            > Short description.
+
+            Body text.
+        """)
+        note = parse_eshp(path)
+        assert "> Short description." not in note.body
+        assert "Body text." in note.body
+
+    def test_no_desc_defaults_empty(self, tmp_path):
+        path = write_memo(tmp_path, "note", "#tag\n\nJust a body.\n")
+        note = parse_eshp(path)
+        assert note.desc == ""
+
+    def test_desc_without_tags(self, tmp_path):
+        path = write_memo(tmp_path, "note", "> A standalone description.\n")
+        note = parse_eshp(path)
+        assert note.desc == "A standalone description."
+        assert note.tags == []
+
+    def test_desc_stripped(self, tmp_path):
+        path = write_memo(tmp_path, "note", ">   Lots of whitespace.  \n")
+        note = parse_eshp(path)
+        assert note.desc == "Lots of whitespace."
+
+
 class TestParseBody:
     def test_body_extracted(self, tmp_path):
         path = write_memo(tmp_path, "note", """\
@@ -171,6 +212,94 @@ class TestAllEdges:
 
 # ──────────────────────────────────────────────────────── render_eshp
 
+class TestEscape:
+    """Backslash escape: \\ at start of stripped line removes special meaning."""
+
+    def test_escaped_dot_in_body(self, tmp_path):
+        path = write_memo(tmp_path, "note", "\\.NET Framework notes.\n")
+        note = parse_eshp(path)
+        assert note.body == ".NET Framework notes."
+        assert note.relationships == {}
+
+    def test_escaped_dot_not_a_rel_header(self, tmp_path):
+        path = write_memo(tmp_path, "note", """\
+            #tag
+
+            Body line.
+
+            \\.depends-on-this-is-body
+        """)
+        note = parse_eshp(path)
+        assert note.relationships == {}
+        assert ".depends-on-this-is-body" in note.body
+
+    def test_escaped_gt_in_body(self, tmp_path):
+        path = write_memo(tmp_path, "note", """\
+            #tag
+
+            \\> This is a blockquote in the body.
+        """)
+        note = parse_eshp(path)
+        assert note.desc == ""
+        assert "> This is a blockquote in the body." in note.body
+
+    def test_escaped_backslash_in_body(self, tmp_path):
+        path = write_memo(tmp_path, "note", "\\\\\\ prefix is literal backslash.\n")
+        note = parse_eshp(path)
+        assert note.body.startswith("\\")
+
+    def test_render_escapes_body_dot(self, tmp_path):
+        note = EshpNote(
+            path=tmp_path / "n.eshp",
+            slug="n",
+            tags=[],
+            body=".NET Framework dependency.",
+            relationships={},
+        )
+        rendered = render_eshp(note)
+        assert "\\." in rendered
+        # The dot line should start with backslash, not raw dot
+        dot_line = next(l for l in rendered.splitlines() if ".NET" in l)
+        assert dot_line.lstrip().startswith("\\.")
+
+    def test_render_escapes_body_gt(self, tmp_path):
+        note = EshpNote(
+            path=tmp_path / "n.eshp",
+            slug="n",
+            tags=[],
+            body="> A quoted line.",
+            relationships={},
+        )
+        rendered = render_eshp(note)
+        assert "\\>" in rendered
+
+    def test_render_escapes_body_backslash(self, tmp_path):
+        note = EshpNote(
+            path=tmp_path / "n.eshp",
+            slug="n",
+            tags=[],
+            body="\\ already escaped.",
+            relationships={},
+        )
+        rendered = render_eshp(note)
+        assert "\\\\" in rendered
+
+    def test_roundtrip_with_escapes(self, tmp_path):
+        original_body = ".NET is great\n> A quote here\n\\ backslash start\nNormal line."
+        note = EshpNote(
+            path=tmp_path / "n.eshp",
+            slug="n",
+            tags=["tech"],
+            body=original_body,
+            relationships={},
+        )
+        rendered = render_eshp(note)
+        path = tmp_path / "n.eshp"
+        path.write_text(rendered, encoding="utf-8")
+        note2 = parse_eshp(path)
+        assert note2.body == original_body
+
+
 class TestRenderMemo:
     def test_render_tags(self, tmp_path):
         note = EshpNote(
@@ -182,6 +311,30 @@ class TestRenderMemo:
         )
         rendered = render_eshp(note)
         assert rendered.startswith("#foo #bar")
+
+    def test_render_desc(self, tmp_path):
+        note = EshpNote(
+            path=tmp_path / "n.memo",
+            slug="n",
+            tags=["foo"],
+            desc="A quick summary.",
+            body="",
+            relationships={},
+        )
+        rendered = render_eshp(note)
+        assert "> A quick summary." in rendered
+
+    def test_render_no_desc_omits_line(self, tmp_path):
+        note = EshpNote(
+            path=tmp_path / "n.memo",
+            slug="n",
+            tags=[],
+            desc="",
+            body="Some content.",
+            relationships={},
+        )
+        rendered = render_eshp(note)
+        assert ">" not in rendered
 
     def test_render_body(self, tmp_path):
         note = EshpNote(
@@ -212,7 +365,9 @@ class TestRenderMemo:
         original = textwrap.dedent("""\
             #service #backend
 
-            Handles authentication.
+            > Handles authentication.
+
+            Extra body detail here.
 
             .depends-on
             -> postgres
@@ -233,6 +388,7 @@ class TestRenderMemo:
         note2 = parse_eshp(path2)
 
         assert note2.tags == note.tags
+        assert note2.desc == note.desc
         assert note2.body == note.body
         assert set(note2.all_outgoing) == set(note.all_outgoing)
         assert set(note2.all_incoming) == set(note.all_incoming)

@@ -25,13 +25,14 @@ def store(memo_dir: Path) -> EshpStore:
     s.close()
 
 
-def make_note(memo_dir: Path, slug: str, tags=(), body="", rels=None) -> EshpNote:
+def make_note(memo_dir: Path, slug: str, tags=(), body="", desc="", rels=None) -> EshpNote:
     """Write a .eshp file and return the parsed EshpNote."""
     rels = rels or {}
     note = EshpNote(
         path=memo_dir / f"{slug}.eshp",
         slug=slug,
         tags=list(tags),
+        desc=desc,
         body=body,
         relationships=rels,
     )
@@ -43,6 +44,26 @@ def make_note(memo_dir: Path, slug: str, tags=(), body="", rels=None) -> EshpNot
 # ──────────────────────────────────────────────────────── upsert / delete
 
 class TestUpsertNote:
+    def test_insert_desc_stored(self, store, memo_dir):
+        note = make_note(memo_dir, "alpha", desc="Short summary of alpha.")
+        store.upsert_note(note)
+        store.conn.commit()
+
+        result = store.get_note("alpha")
+        assert result["desc"] == "Short summary of alpha."
+
+    def test_upsert_updates_desc(self, store, memo_dir):
+        note = make_note(memo_dir, "alpha", desc="Original desc.")
+        store.upsert_note(note)
+        store.conn.commit()
+
+        note2 = make_note(memo_dir, "alpha", desc="Updated desc.")
+        store.upsert_note(note2)
+        store.conn.commit()
+
+        result = store.get_note("alpha")
+        assert result["desc"] == "Updated desc."
+
     def test_insert_basic(self, store, memo_dir):
         note = make_note(memo_dir, "alpha", tags=["svc"], body="Alpha service.")
         store.upsert_note(note)
