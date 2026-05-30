@@ -16,6 +16,17 @@ from eshp_parser import EshpNote, parse_eshp
 DB_FILE = ".eshp.db"
 
 
+# Scoring weights for scan()
+_SCORE_SLUG_EXACT   = 100
+_SCORE_TAG_EXACT    =  60
+_SCORE_REL_EXACT    =  40
+_SCORE_SLUG_PARTIAL =  20
+_SCORE_TAG_PARTIAL  =  10
+_SCORE_REL_PARTIAL  =   5
+_SCORE_BODY_PARTIAL =   3
+_SCORE_NEIGHBOR     =   1
+
+
 class EshpStore:
     def __init__(self, root: Path):
         self.root = root
@@ -214,59 +225,92 @@ class EshpStore:
         }
 
     def scan(self, query: str, limit: int = 20) -> list[dict]:
-        """Broad search: FTS (body+slug), tag-name match, and 1-hop relation expansion.
+        """Scored broad search: slug, tag, rel name, body, and 1-hop expansion.
 
-        Returns compact summaries suitable for loading into LLM context.
-        Each result has: slug, desc, tags, body_preview, edge_count.
+        Each signal contributes points; scores accumulate across multiple matches.
+        Results are returned sorted by score descending, trimmed to `limit`.
+        Each result has: slug, desc, tags, body_preview, edge_count, score.
         """
-        found: dict[str, dict] = {}
+        scores: dict[str, float] = {}
+        q = query.lower()
 
-        base_select = (
-            "SELECT DISTINCT n.slug, n.desc, n.body, "
-            "group_concat(t.tag, ' ') AS tags "
-            "FROM notes n LEFT JOIN tags t ON t.slug = n.slug "
-        )
+        def bump(slug: str, points: float) -> None:
+            scores[slug] = scores.get(slug, 0) + points
 
-        # 1. Full-text: body + slug
+        # 1. Slug exact / partial
         for r in self.conn.execute(
-            base_select + "WHERE (n.body LIKE ? OR n.slug LIKE ?) GROUP BY n.slug",
-            (f"%{query}%", f"%{query}%"),
+            "SELECT slug FROM notes WHERE lower(slug)=?", (q,)
         ):
-            found[r["slug"]] = dict(r)
-
-        # 2. Tag name match
+            bump(r["slug"], _SCORE_SLUG_EXACT)
         for r in self.conn.execute(
-            base_select
-            + "WHERE n.slug IN (SELECT slug FROM tags WHERE tag LIKE ?) GROUP BY n.slug",
-            (f"%{query}%",),
+            "SELECT slug FROM notes WHERE lower(slug) LIKE ? AND lower(slug)!=?",
+            (f"%{q}%", q),
         ):
-            found.setdefault(r["slug"], dict(r))
+            bump(r["slug"], _SCORE_SLUG_PARTIAL)
 
-        # 3. 1-hop relation expansion from current matches
-        if found:
-            seeds = list(found.keys())
+        # 2. Tag exact / partial
+        for r in self.conn.execute(
+            "SELECT slug FROM tags WHERE lower(tag)=?", (q,)
+        ):
+            bump(r["slug"], _SCORE_TAG_EXACT)
+        for r in self.conn.execute(
+            "SELECT slug FROM tags WHERE lower(tag) LIKE ? AND lower(tag)!=?",
+            (f"%{q}%", q),
+        ):
+            bump(r["slug"], _SCORE_TAG_PARTIAL)
+
+        # 3. Rel name exact / partial (both ends of matching edges score)
+        for r in self.conn.execute(
+            "SELECT DISTINCT src, dst FROM edges WHERE lower(rel)=?", (q,)
+        ):
+            bump(r["src"], _SCORE_REL_EXACT)
+            bump(r["dst"], _SCORE_REL_EXACT)
+        for r in self.conn.execute(
+            "SELECT DISTINCT src, dst FROM edges WHERE lower(rel) LIKE ? AND lower(rel)!=?",
+            (f"%{q}%", q),
+        ):
+            bump(r["src"], _SCORE_REL_PARTIAL)
+            bump(r["dst"], _SCORE_REL_PARTIAL)
+
+        # 4. Body substring match
+        for r in self.conn.execute(
+            "SELECT slug FROM notes WHERE lower(body) LIKE ?", (f"%{q}%",)
+        ):
+            bump(r["slug"], _SCORE_BODY_PARTIAL)
+
+        # 5. 1-hop neighbor expansion for all direct matches so far
+        if scores:
+            seeds = list(scores.keys())
             ph = ",".join("?" * len(seeds))
-            neighbor_slugs: set[str] = set()
             for row in self.conn.execute(
                 f"SELECT src, dst FROM edges WHERE src IN ({ph}) OR dst IN ({ph})",
                 seeds * 2,
             ):
                 for node in (row["src"], row["dst"]):
-                    if node not in found:
-                        neighbor_slugs.add(node)
+                    if node not in scores:
+                        bump(node, _SCORE_NEIGHBOR)
 
-            if neighbor_slugs:
-                nph = ",".join("?" * len(neighbor_slugs))
-                for r in self.conn.execute(
-                    base_select + f"WHERE n.slug IN ({nph}) GROUP BY n.slug",
-                    list(neighbor_slugs),
-                ):
-                    found.setdefault(r["slug"], dict(r))
+        if not scores:
+            return []
 
-        # 4. Enrich with edge_count and body_preview, then trim to limit
+        # 6. Sort by score, take top `limit`, fetch note data
+        ranked = sorted(scores, key=lambda s: scores[s], reverse=True)[:limit]
+        ph = ",".join("?" * len(ranked))
+        rows = {
+            r["slug"]: dict(r)
+            for r in self.conn.execute(
+                f"SELECT n.slug, n.desc, n.body, group_concat(t.tag, ' ') AS tags "
+                f"FROM notes n LEFT JOIN tags t ON t.slug=n.slug "
+                f"WHERE n.slug IN ({ph}) GROUP BY n.slug",
+                ranked,
+            )
+        }
+
         results = []
-        for data in list(found.values())[:limit]:
-            slug = data["slug"]
+        for slug in ranked:
+            if slug not in rows:
+                continue  # referenced in an edge but never upserted as a note
+            data = rows[slug]
             edge_count = self.conn.execute(
                 "SELECT COUNT(*) FROM edges WHERE src=? OR dst=?", (slug, slug)
             ).fetchone()[0]
@@ -277,6 +321,7 @@ class EshpStore:
                 "tags": data.get("tags") or "",
                 "body_preview": body[:200].replace("\n", " "),
                 "edge_count": edge_count,
+                "score": scores[slug],
             })
 
         return results

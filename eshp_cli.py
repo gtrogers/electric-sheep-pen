@@ -382,7 +382,8 @@ def scan(query, limit, root):
     click.echo()
     for r in results:
         tag_str = f"  [{r['tags']}]" if r["tags"] else ""
-        header = click.style(r["slug"], fg="cyan", bold=True) + click.style(tag_str, fg="yellow")
+        score_str = click.style(f"  score:{r['score']}", fg="white", dim=True)
+        header = click.style(r["slug"], fg="cyan", bold=True) + click.style(tag_str, fg="yellow") + score_str
         click.echo(header)
         if r["desc"]:
             click.echo(f"  {click.style(r['desc'], fg='white', dim=True)}")

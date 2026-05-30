@@ -444,6 +444,7 @@ class TestScan:
         assert "svc" in r["tags"]
         assert "body_preview" in r
         assert "edge_count" in r
+        assert "score" in r
 
     def test_scan_body_preview_truncated(self, store, memo_dir):
         long_body = "x" * 300
@@ -466,6 +467,79 @@ class TestScan:
 
         results = store.scan("common", limit=3)
         assert len(results) <= 3
+
+    def test_scan_results_ordered_by_score(self, store, memo_dir):
+        """Results must be sorted highest score first."""
+        make_note(memo_dir, "jwt", body="Some unrelated content.")      # exact slug match
+        make_note(memo_dir, "other", body="JWT is used here for auth.")  # body match only
+        store.sync()
+
+        results = store.scan("jwt")
+        assert results[0]["slug"] == "jwt"  # exact slug should be first
+
+    def test_scan_exact_slug_scores_highest(self, store, memo_dir):
+        make_note(memo_dir, "auth", body="auth token logic.")
+        make_note(memo_dir, "payment-auth", body="Uses auth.")
+        store.sync()
+
+        results = store.scan("auth")
+        scores = {r["slug"]: r["score"] for r in results}
+        assert scores["auth"] > scores["payment-auth"]
+
+    def test_scan_exact_tag_scores_higher_than_body(self, store, memo_dir):
+        make_note(memo_dir, "tagged", tags=["billing"], body="Unrelated body.")
+        make_note(memo_dir, "mentioned", body="billing logic here.")
+        store.sync()
+
+        results = store.scan("billing")
+        scores = {r["slug"]: r["score"] for r in results}
+        assert scores["tagged"] > scores["mentioned"]
+
+    def test_scan_exact_rel_scores_higher_than_body(self, store, memo_dir):
+        rel = Relationship(name="billing", outgoing=["other"])
+        make_note(memo_dir, "src-note", rels={"billing": rel})
+        make_note(memo_dir, "body-note", body="billing is mentioned here.")
+        make_note(memo_dir, "other")
+        store.sync()
+
+        results = store.scan("billing")
+        scores = {r["slug"]: r["score"] for r in results}
+        assert scores["src-note"] > scores["body-note"]
+
+    def test_scan_multiple_matches_accumulate(self, store, memo_dir):
+        """A note matching slug AND body should outscore one matching only slug."""
+        make_note(memo_dir, "auth", body="auth token logic here.")        # exact slug + body
+        make_note(memo_dir, "payment", body="Handles payments.")           # no match at all
+        store.sync()
+
+        results = store.scan("auth")
+        auth_result = next(r for r in results if r["slug"] == "auth")
+        # Should have scored from both slug exact AND body partial
+        from eshp_store import _SCORE_SLUG_EXACT, _SCORE_BODY_PARTIAL
+        assert auth_result["score"] >= _SCORE_SLUG_EXACT + _SCORE_BODY_PARTIAL
+
+    def test_scan_neighbor_scores_lower_than_direct_match(self, store, memo_dir):
+        """A note that only appears via relation expansion should score lower than a direct match."""
+        rel = Relationship(name="depends-on", outgoing=["postgres"])
+        make_note(memo_dir, "auth", body="JWT auth service.")
+        make_note(memo_dir, "auth-service", rels={"depends-on": rel}, body="Calls auth.")
+        make_note(memo_dir, "postgres", body="Database.")
+        store.sync()
+
+        results = store.scan("JWT")
+        scores = {r["slug"]: r["score"] for r in results}
+        # auth has a body match; postgres only appears via expansion
+        assert scores["auth"] > scores.get("postgres", 0)
+
+    def test_scan_limit_cuts_by_score(self, store, memo_dir):
+        """With limit=1, only the highest-scoring note is returned."""
+        make_note(memo_dir, "auth", body="auth details.")      # exact slug + body → high score
+        make_note(memo_dir, "other", body="auth mentioned.")   # body only → lower score
+        store.sync()
+
+        results = store.scan("auth", limit=1)
+        assert len(results) == 1
+        assert results[0]["slug"] == "auth"
 
 
 # ──────────────────────────────────────────────────────── recall
