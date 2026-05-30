@@ -29,7 +29,9 @@ Store methods:
   store.scan(query, limit=20)  → list[{slug, desc, tags, body_preview, edge_count, score}]
   store.recall(slug, n=5)      → {note: full_note_dict, related: [full_note_dicts]} | None
 
-Score constants: _SCORE_SLUG_EXACT, _SCORE_TAG_EXACT, _SCORE_REL_EXACT, etc. (module-level)
+SHARP EDGE: recall() updates last_recalled_at in the DB (via record_recall).
+This metadata is DB-only (.eshp.db, gitignored). The eshp summarise command
+surfaces recently recalled slugs — useful for agents to see what was recently in focus.
 
 .related
 -> cli
