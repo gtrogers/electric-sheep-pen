@@ -14,6 +14,12 @@ Run tests:
 Run the watcher (keep DB live while editing notes):
   eshp watch
 
+Query the memory graph:
+  eshp scan <query>        broad discovery (FTS + tags + 1-hop expansion)
+  eshp recall <slug>       focused context load (full note + N related)
+  eshp show <slug>         single note with edges
+  eshp tag <tagname>       notes by tag
+
 The DB (.eshp.db) lives inside the eshp/ directory.
 It is gitignored — regenerated from .eshp files via `eshp watch` or sync().
 

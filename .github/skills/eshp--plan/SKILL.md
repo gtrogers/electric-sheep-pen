@@ -21,9 +21,10 @@ they want to make.
 
 - Read the plan
 - Query eshp to get relevant context:
+  - `eshp scan <query>` broad discovery — FTS + tag names + 1-hop relation expansion; best starting point
+  - `eshp recall <slug>` focused context load — full note + N closest related notes with body content
   - `eshp tags` list all tags in the graph, tags are used to group topics
   - `eshp tag <tag>` list all notes with a given tag
-  - `eshp show <tag>` show a note and it's connections to related notes
-  - `eshp search` full text search - use only as a fallback if there are no relevant tags
+  - `eshp show <slug>` show a note and its connections to related notes
 - Also look at code, tests, etc
 - Add new ideas, concepts and details to the memory graph (add entries to the ./eshp folder)
