@@ -5,11 +5,17 @@
 Two commands added to improve how agents load context from the memory graph.
 
 scan <query> [--limit N]
-  Broad discovery. Combines three sources:
-    1. Full-text search — body + slug LIKE match
-    2. Tag-name match  — tags whose name matches the query
-    3. 1-hop relation expansion — direct neighbours of all text/tag matches
-  Returns compact summaries: slug, desc, tags, body_preview (≤200 chars), edge_count.
+  Broad discovery. Scores every candidate note across multiple signals (additive):
+    slug exact match (case-insensitive)  100  — highest priority
+    tag exact match                       60
+    rel name exact match                  40
+    slug partial match                    20
+    tag partial match                     10
+    rel name partial match                 5
+    body substring match                   3  — lowest direct signal
+    1-hop neighbor of a direct match       1  — expansion only
+  Results sorted by score descending, trimmed to limit.
+  Returns compact summaries: slug, desc, tags, body_preview (≤200 chars), edge_count, score.
   Designed to be loaded into LLM context as a topic map.
 
 recall <slug> [--n N]
@@ -20,8 +26,10 @@ recall <slug> [--n N]
   Use this to load a specific topic and its immediate context into an LLM.
 
 Store methods:
-  store.scan(query, limit=20)  → list[{slug, desc, tags, body_preview, edge_count}]
+  store.scan(query, limit=20)  → list[{slug, desc, tags, body_preview, edge_count, score}]
   store.recall(slug, n=5)      → {note: full_note_dict, related: [full_note_dicts]} | None
+
+Score constants: _SCORE_SLUG_EXACT, _SCORE_TAG_EXACT, _SCORE_REL_EXACT, etc. (module-level)
 
 .related
 -> cli
