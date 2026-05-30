@@ -416,7 +416,7 @@ def stats(root):
 
 @cli.command()
 @click.argument("query")
-@click.option("--limit", "-n", default=20, show_default=True)
+@click.option("--limit", "-n", default=5, show_default=True)
 @click.option("--root", default=None, type=click.Path())
 def scan(query, limit, root):
     """Broad search across body, slugs, tags, and 1-hop relations.
@@ -440,8 +440,6 @@ def scan(query, limit, root):
         click.echo(header)
         if r["desc"]:
             click.echo(f"  {click.style(r['desc'], fg='white', dim=True)}")
-        if r["body_preview"]:
-            click.echo(f"  {r['body_preview']}")
         if r["edge_count"]:
             click.echo(f"  {click.style(str(r['edge_count']) + ' connection(s)', fg='blue', dim=True)}")
         click.echo()

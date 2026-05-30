@@ -15,8 +15,9 @@ scan <query> [--limit N]
     body substring match                   3  — lowest direct signal
     1-hop neighbor of a direct match       1  — expansion only
   Results sorted by score descending, trimmed to limit.
-  Returns compact summaries: slug, desc, tags, body_preview (≤200 chars), edge_count, score.
-  Designed to be loaded into LLM context as a topic map.
+  Returns compact summaries: slug, desc, tags, edge_count, score.
+  body_preview is still in the store result dict but NOT shown in CLI output —
+  kept for programmatic use / future tooling.
 
 recall <slug> [--n N]
   Focused retrieval. Given a slug:
