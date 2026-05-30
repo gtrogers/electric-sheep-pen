@@ -1,0 +1,28 @@
+#cli #design #spec
+
+> scan and recall commands for high-recall, LLM-friendly memory retrieval.
+
+Two commands added to improve how agents load context from the memory graph.
+
+scan <query> [--limit N]
+  Broad discovery. Combines three sources:
+    1. Full-text search — body + slug LIKE match
+    2. Tag-name match  — tags whose name matches the query
+    3. 1-hop relation expansion — direct neighbours of all text/tag matches
+  Returns compact summaries: slug, desc, tags, body_preview (≤200 chars), edge_count.
+  Designed to be loaded into LLM context as a topic map.
+
+recall <slug> [--n N]
+  Focused retrieval. Given a slug:
+    1. Returns the full note (body, desc, tags, all edges)
+    2. Returns up to N direct neighbours with full body content
+  Both outgoing and incoming neighbours are included.
+  Use this to load a specific topic and its immediate context into an LLM.
+
+Store methods:
+  store.scan(query, limit=20)  → list[{slug, desc, tags, body_preview, edge_count}]
+  store.recall(slug, n=5)      → {note: full_note_dict, related: [full_note_dicts]} | None
+
+.related
+-> cli
+-> store

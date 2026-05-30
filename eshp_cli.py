@@ -6,6 +6,8 @@ Usage:
   eshp watch                         Watch eshp/ and keep the DB live
   eshp new <slug> [--tags t1,t2]     Create a new note (opens $EDITOR)
   eshp show <slug>                   Show a note + its graph edges
+  eshp scan <query> [--limit N]      Broad search: FTS + tags + 1-hop relations
+  eshp recall <slug> [--n N]         Full note + N closest related notes
   eshp search <query> [--tag t]      Full-text search
   eshp tags                          List all tags with counts
   eshp tag <tagname>                 List notes with a tag
@@ -357,6 +359,93 @@ def stats(root):
     click.echo(f"  tags  : {click.style(str(s['tags']),  fg='yellow')}")
     click.echo(f"  edges : {click.style(str(s['edges']), fg='green')}")
     click.echo()
+
+
+@cli.command()
+@click.argument("query")
+@click.option("--limit", "-n", default=20, show_default=True)
+@click.option("--root", default=None, type=click.Path())
+def scan(query, limit, root):
+    """Broad search across body, slugs, tags, and 1-hop relations.
+
+    Returns a compact summary of matching entries, suitable for LLM context.
+    Combines full-text search, tag-name matching, and relationship expansion.
+    """
+    store = get_store(Path(root) if root else None)
+    results = store.scan(query, limit=limit)
+    store.close()
+
+    if not results:
+        click.echo("No results.")
+        return
+
+    click.echo()
+    for r in results:
+        tag_str = f"  [{r['tags']}]" if r["tags"] else ""
+        header = click.style(r["slug"], fg="cyan", bold=True) + click.style(tag_str, fg="yellow")
+        click.echo(header)
+        if r["desc"]:
+            click.echo(f"  {click.style(r['desc'], fg='white', dim=True)}")
+        if r["body_preview"]:
+            click.echo(f"  {r['body_preview']}")
+        if r["edge_count"]:
+            click.echo(f"  {click.style(str(r['edge_count']) + ' connection(s)', fg='blue', dim=True)}")
+        click.echo()
+
+
+@cli.command()
+@click.argument("slug")
+@click.option("--n", "-n", default=5, show_default=True, help="Number of related notes to include")
+@click.option("--root", default=None, type=click.Path())
+def recall(slug, n, root):
+    """Return a note and its N closest related notes with full content.
+
+    Loads the target note and all direct neighbours into a focused context
+    block, useful for bringing an LLM up to speed on a specific topic.
+    """
+    store = get_store(Path(root) if root else None)
+    result = store.recall(slug, n=n)
+    store.close()
+
+    if result is None:
+        click.echo(click.style(f"Note '{slug}' not found. Is `eshp watch` running?", fg="red"))
+        sys.exit(1)
+
+    note = result["note"]
+    related = result["related"]
+
+    click.echo()
+    click.echo(_note_header(note["slug"], note["tags"] or "", note.get("desc", "")))
+    click.echo()
+
+    if note["body"]:
+        click.echo(note["body"])
+        click.echo()
+
+    if note["edges_out"]:
+        out_slugs = [e["dst"] for e in note["edges_out"]]
+        descs = {r["slug"]: r.get("desc", "") for r in related if r["slug"] in out_slugs}
+        click.echo(click.style("Outgoing:", fg="white", bold=True))
+        for e in note["edges_out"]:
+            click.echo(_edge_line("out", e["rel"], e["dst"], descs.get(e["dst"], "")))
+        click.echo()
+
+    if note["edges_in"]:
+        in_slugs = [e["src"] for e in note["edges_in"]]
+        descs = {r["slug"]: r.get("desc", "") for r in related if r["slug"] in in_slugs}
+        click.echo(click.style("Incoming:", fg="white", bold=True))
+        for e in note["edges_in"]:
+            click.echo(_edge_line("in", e["rel"], e["src"], descs.get(e["src"], "")))
+        click.echo()
+
+    if related:
+        click.echo(click.style(f"Related ({len(related)}):", fg="white", bold=True))
+        click.echo()
+        for rel_note in related:
+            click.echo(_note_header(rel_note["slug"], rel_note["tags"] or "", rel_note.get("desc", "")))
+            if rel_note["body"]:
+                click.echo(rel_note["body"])
+            click.echo()
 
 
 if __name__ == "__main__":

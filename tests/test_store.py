@@ -375,3 +375,161 @@ class TestStats:
     def test_stats_empty(self, store):
         s = store.stats()
         assert s == {"notes": 0, "tags": 0, "edges": 0}
+
+
+# ──────────────────────────────────────────────────────── scan
+
+class TestScan:
+    def test_scan_matches_body(self, store, memo_dir):
+        make_note(memo_dir, "auth", body="Handles JWT authentication tokens.")
+        make_note(memo_dir, "cache", body="Redis caching layer.")
+        store.sync()
+
+        results = store.scan("JWT")
+        slugs = [r["slug"] for r in results]
+        assert "auth" in slugs
+        assert "cache" not in slugs
+
+    def test_scan_matches_slug(self, store, memo_dir):
+        make_note(memo_dir, "auth-service", body="Some body.")
+        make_note(memo_dir, "unrelated", body="Nothing here.")
+        store.sync()
+
+        results = store.scan("auth")
+        slugs = [r["slug"] for r in results]
+        assert "auth-service" in slugs
+        assert "unrelated" not in slugs
+
+    def test_scan_matches_tag_name(self, store, memo_dir):
+        make_note(memo_dir, "payment", tags=["billing"], body="Payment processing.")
+        make_note(memo_dir, "other", tags=["unrelated"], body="Nothing relevant.")
+        store.sync()
+
+        results = store.scan("billing")
+        slugs = [r["slug"] for r in results]
+        assert "payment" in slugs
+        assert "other" not in slugs
+
+    def test_scan_expands_via_relations(self, store, memo_dir):
+        """Notes related to a text match are included in scan results."""
+        rel = Relationship(name="depends-on", outgoing=["postgres"])
+        make_note(memo_dir, "auth", body="JWT auth service.", rels={"depends-on": rel})
+        make_note(memo_dir, "postgres", desc="Primary relational database.", body="Postgres config.")
+        store.sync()
+
+        # "JWT" matches auth; postgres is 1 hop away via depends-on
+        results = store.scan("JWT")
+        slugs = [r["slug"] for r in results]
+        assert "auth" in slugs
+        assert "postgres" in slugs
+
+    def test_scan_deduplicates(self, store, memo_dir):
+        """A note matching both body and tag appears only once."""
+        make_note(memo_dir, "auth", tags=["auth"], body="auth token logic.")
+        store.sync()
+
+        results = store.scan("auth")
+        slugs = [r["slug"] for r in results]
+        assert slugs.count("auth") == 1
+
+    def test_scan_result_has_summary_fields(self, store, memo_dir):
+        make_note(memo_dir, "alpha", tags=["svc"], desc="Short desc.", body="Body text here.")
+        store.sync()
+
+        results = store.scan("alpha")
+        assert len(results) == 1
+        r = results[0]
+        assert r["slug"] == "alpha"
+        assert r["desc"] == "Short desc."
+        assert "svc" in r["tags"]
+        assert "body_preview" in r
+        assert "edge_count" in r
+
+    def test_scan_body_preview_truncated(self, store, memo_dir):
+        long_body = "x" * 300
+        make_note(memo_dir, "big", body=long_body)
+        store.sync()
+
+        results = store.scan("big")
+        assert len(results[0]["body_preview"]) <= 200
+
+    def test_scan_no_results(self, store, memo_dir):
+        make_note(memo_dir, "alpha", body="Unrelated content.")
+        store.sync()
+
+        assert store.scan("zzznomatch") == []
+
+    def test_scan_limit(self, store, memo_dir):
+        for i in range(10):
+            make_note(memo_dir, f"note-{i}", body="common keyword")
+        store.sync()
+
+        results = store.scan("common", limit=3)
+        assert len(results) <= 3
+
+
+# ──────────────────────────────────────────────────────── recall
+
+class TestRecall:
+    def test_recall_returns_none_for_missing_slug(self, store):
+        assert store.recall("nonexistent") is None
+
+    def test_recall_returns_full_note(self, store, memo_dir):
+        make_note(memo_dir, "auth", tags=["backend"], desc="Auth service.", body="Full body here.")
+        store.sync()
+
+        result = store.recall("auth")
+        assert result is not None
+        assert result["note"]["slug"] == "auth"
+        assert result["note"]["body"] == "Full body here."
+        assert result["note"]["desc"] == "Auth service."
+
+    def test_recall_returns_related_notes(self, store, memo_dir):
+        rel = Relationship(name="depends-on", outgoing=["postgres", "redis"])
+        make_note(memo_dir, "auth", rels={"depends-on": rel})
+        make_note(memo_dir, "postgres", desc="Primary DB.", body="Postgres body.")
+        make_note(memo_dir, "redis", desc="Cache layer.", body="Redis body.")
+        store.sync()
+
+        result = store.recall("auth", n=5)
+        related_slugs = [r["slug"] for r in result["related"]]
+        assert "postgres" in related_slugs
+        assert "redis" in related_slugs
+
+    def test_recall_respects_n_limit(self, store, memo_dir):
+        rels = Relationship(name="depends-on", outgoing=["a", "b", "c", "d", "e"])
+        make_note(memo_dir, "hub", rels={"depends-on": rels})
+        for s in ["a", "b", "c", "d", "e"]:
+            make_note(memo_dir, s, body=f"Note {s}")
+        store.sync()
+
+        result = store.recall("hub", n=2)
+        assert len(result["related"]) <= 2
+
+    def test_recall_related_have_full_body(self, store, memo_dir):
+        rel = Relationship(name="depends-on", outgoing=["postgres"])
+        make_note(memo_dir, "auth", rels={"depends-on": rel})
+        make_note(memo_dir, "postgres", body="Full postgres body content.")
+        store.sync()
+
+        result = store.recall("auth", n=5)
+        pg = next(r for r in result["related"] if r["slug"] == "postgres")
+        assert pg["body"] == "Full postgres body content."
+
+    def test_recall_no_related_when_isolated(self, store, memo_dir):
+        make_note(memo_dir, "lone", body="Isolated note.")
+        store.sync()
+
+        result = store.recall("lone", n=5)
+        assert result["related"] == []
+
+    def test_recall_related_includes_incoming_neighbors(self, store, memo_dir):
+        """Notes that point TO the target should also appear as related."""
+        rel = Relationship(name="uses", outgoing=["auth"])
+        make_note(memo_dir, "gateway", rels={"uses": rel})
+        make_note(memo_dir, "auth", body="Auth service.")
+        store.sync()
+
+        result = store.recall("auth", n=5)
+        related_slugs = [r["slug"] for r in result["related"]]
+        assert "gateway" in related_slugs

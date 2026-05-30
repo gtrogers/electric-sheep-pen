@@ -213,5 +213,100 @@ class EshpStore:
             "edges": self.conn.execute("SELECT COUNT(*) FROM edges").fetchone()[0],
         }
 
+    def scan(self, query: str, limit: int = 20) -> list[dict]:
+        """Broad search: FTS (body+slug), tag-name match, and 1-hop relation expansion.
+
+        Returns compact summaries suitable for loading into LLM context.
+        Each result has: slug, desc, tags, body_preview, edge_count.
+        """
+        found: dict[str, dict] = {}
+
+        base_select = (
+            "SELECT DISTINCT n.slug, n.desc, n.body, "
+            "group_concat(t.tag, ' ') AS tags "
+            "FROM notes n LEFT JOIN tags t ON t.slug = n.slug "
+        )
+
+        # 1. Full-text: body + slug
+        for r in self.conn.execute(
+            base_select + "WHERE (n.body LIKE ? OR n.slug LIKE ?) GROUP BY n.slug",
+            (f"%{query}%", f"%{query}%"),
+        ):
+            found[r["slug"]] = dict(r)
+
+        # 2. Tag name match
+        for r in self.conn.execute(
+            base_select
+            + "WHERE n.slug IN (SELECT slug FROM tags WHERE tag LIKE ?) GROUP BY n.slug",
+            (f"%{query}%",),
+        ):
+            found.setdefault(r["slug"], dict(r))
+
+        # 3. 1-hop relation expansion from current matches
+        if found:
+            seeds = list(found.keys())
+            ph = ",".join("?" * len(seeds))
+            neighbor_slugs: set[str] = set()
+            for row in self.conn.execute(
+                f"SELECT src, dst FROM edges WHERE src IN ({ph}) OR dst IN ({ph})",
+                seeds * 2,
+            ):
+                for node in (row["src"], row["dst"]):
+                    if node not in found:
+                        neighbor_slugs.add(node)
+
+            if neighbor_slugs:
+                nph = ",".join("?" * len(neighbor_slugs))
+                for r in self.conn.execute(
+                    base_select + f"WHERE n.slug IN ({nph}) GROUP BY n.slug",
+                    list(neighbor_slugs),
+                ):
+                    found.setdefault(r["slug"], dict(r))
+
+        # 4. Enrich with edge_count and body_preview, then trim to limit
+        results = []
+        for data in list(found.values())[:limit]:
+            slug = data["slug"]
+            edge_count = self.conn.execute(
+                "SELECT COUNT(*) FROM edges WHERE src=? OR dst=?", (slug, slug)
+            ).fetchone()[0]
+            body = data.get("body") or ""
+            results.append({
+                "slug": slug,
+                "desc": data.get("desc") or "",
+                "tags": data.get("tags") or "",
+                "body_preview": body[:200].replace("\n", " "),
+                "edge_count": edge_count,
+            })
+
+        return results
+
+    def recall(self, slug: str, n: int = 5) -> Optional[dict]:
+        """Return a full note and its N closest related notes (direct 1-hop neighbors).
+
+        Returns None if the slug is not found.
+        Each related note includes full body, desc, tags, and edges.
+        """
+        note = self.get_note(slug)
+        if note is None:
+            return None
+
+        edges = self.neighbours(slug, depth=1)
+        neighbor_slugs: list[str] = []
+        seen: set[str] = {slug}
+        for e in edges:
+            for node in (e["src"], e["dst"]):
+                if node not in seen:
+                    seen.add(node)
+                    neighbor_slugs.append(node)
+
+        related = []
+        for ns in neighbor_slugs[:n]:
+            neighbor_note = self.get_note(ns)
+            if neighbor_note is not None:
+                related.append(neighbor_note)
+
+        return {"note": note, "related": related}
+
     def close(self):
         self.conn.close()
