@@ -607,3 +607,73 @@ class TestRecall:
         result = store.recall("auth", n=5)
         related_slugs = [r["slug"] for r in result["related"]]
         assert "gateway" in related_slugs
+
+
+# ──────────────────────────────────────────────────── all_rels / all_edges
+
+class TestAllRels:
+    def test_returns_rels_with_counts(self, store, memo_dir):
+        rel_do = Relationship(name="depends-on", outgoing=["db", "cache"])
+        rel_uses = Relationship(name="uses", outgoing=["db"])
+        make_note(memo_dir, "api", rels={"depends-on": rel_do})
+        make_note(memo_dir, "worker", rels={"uses": rel_uses})
+        store.sync()
+
+        result = store.all_rels()
+        rel_dict = dict(result)
+        assert "depends-on" in rel_dict
+        assert rel_dict["depends-on"] == 2
+        assert "uses" in rel_dict
+        assert rel_dict["uses"] == 1
+
+    def test_sorted_by_count_descending(self, store, memo_dir):
+        rel_a = Relationship(name="uses", outgoing=["x", "y", "z"])
+        rel_b = Relationship(name="depends-on", outgoing=["x"])
+        make_note(memo_dir, "hub", rels={"uses": rel_a, "depends-on": rel_b})
+        store.sync()
+
+        result = store.all_rels()
+        counts = [cnt for _, cnt in result]
+        assert counts == sorted(counts, reverse=True)
+
+    def test_empty_when_no_edges(self, store, memo_dir):
+        make_note(memo_dir, "lone")
+        store.sync()
+
+        assert store.all_rels() == []
+
+
+class TestAllEdges:
+    def test_returns_all_edges(self, store, memo_dir):
+        rel = Relationship(name="depends-on", outgoing=["db", "cache"])
+        make_note(memo_dir, "api", rels={"depends-on": rel})
+        store.sync()
+
+        result = store.all_edges()
+        triples = [(e["src"], e["rel"], e["dst"]) for e in result]
+        assert ("api", "depends-on", "db") in triples
+        assert ("api", "depends-on", "cache") in triples
+
+    def test_filter_by_rel(self, store, memo_dir):
+        rel_do = Relationship(name="depends-on", outgoing=["db"])
+        rel_uses = Relationship(name="uses", outgoing=["cache"])
+        make_note(memo_dir, "api", rels={"depends-on": rel_do, "uses": rel_uses})
+        store.sync()
+
+        result = store.all_edges(rel="depends-on")
+        assert all(e["rel"] == "depends-on" for e in result)
+        rels_seen = {e["rel"] for e in result}
+        assert "uses" not in rels_seen
+
+    def test_filter_nonexistent_rel_returns_empty(self, store, memo_dir):
+        rel = Relationship(name="depends-on", outgoing=["db"])
+        make_note(memo_dir, "api", rels={"depends-on": rel})
+        store.sync()
+
+        assert store.all_edges(rel="no-such-rel") == []
+
+    def test_empty_when_no_edges(self, store, memo_dir):
+        make_note(memo_dir, "lone")
+        store.sync()
+
+        assert store.all_edges() == []

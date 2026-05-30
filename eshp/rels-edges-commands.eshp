@@ -1,0 +1,17 @@
+#cli #spec
+> rels and edges commands for surfacing graph relationships.
+
+Two commands added to expose the relationship structure of the graph directly.
+
+rels
+  Lists all relationship types (rel names) with their edge counts, sorted by
+  frequency descending. Displays a bar chart like the `tags` command.
+  Store method: all_rels() → list[tuple[str, int]]
+  SQL: SELECT rel, COUNT(*) as cnt FROM edges GROUP BY rel ORDER BY cnt DESC
+
+edges [--rel REL]
+  Lists all src --[rel]--> dst triples in the graph, optionally filtered
+  to a specific relationship name. Ordered by rel, src, dst.
+  Store method: all_edges(rel=None) → list[dict{src, rel, dst}]
+
+. <- related cli

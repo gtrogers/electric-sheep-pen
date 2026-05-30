@@ -217,6 +217,26 @@ class EshpStore:
             )
         ]
 
+    def all_rels(self) -> list[tuple[str, int]]:
+        """Return all relationship types with their edge counts, sorted by count desc."""
+        return [
+            (r["rel"], r["cnt"]) for r in self.conn.execute(
+                "SELECT rel, COUNT(*) as cnt FROM edges GROUP BY rel ORDER BY cnt DESC"
+            )
+        ]
+
+    def all_edges(self, rel: Optional[str] = None) -> list[dict]:
+        """Return all edges as {src, rel, dst}, optionally filtered by rel name."""
+        if rel:
+            rows = self.conn.execute(
+                "SELECT src, rel, dst FROM edges WHERE rel=? ORDER BY rel, src, dst", (rel,)
+            )
+        else:
+            rows = self.conn.execute(
+                "SELECT src, rel, dst FROM edges ORDER BY rel, src, dst"
+            )
+        return [dict(r) for r in rows]
+
     def stats(self) -> dict:
         return {
             "notes": self.conn.execute("SELECT COUNT(*) FROM notes").fetchone()[0],

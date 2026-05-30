@@ -11,6 +11,8 @@ Usage:
   eshp search <query> [--tag t]      Full-text search
   eshp tags                          List all tags with counts
   eshp tag <tagname>                 List notes with a tag
+  eshp rels                          List all relationship types with counts
+  eshp edges [--rel REL]             List all slug --[rel]--> slug triples
   eshp graph <slug> [--depth 2]      Show neighbourhood graph
   eshp stats                         DB statistics
 """
@@ -293,6 +295,54 @@ def tag(tagname, root):
         if desc:
             line += f"  {click.style(desc, fg='white', dim=True)}"
         click.echo(line)
+    click.echo()
+
+
+@cli.command()
+@click.option("--root", default=None, type=click.Path())
+def rels(root):
+    """List all relationship types and their edge counts."""
+    store = get_store(Path(root) if root else None)
+    all_rels = store.all_rels()
+    store.close()
+
+    if not all_rels:
+        click.echo("No relationships found.")
+        return
+
+    click.echo()
+    for rel, cnt in all_rels:
+        bar = "█" * min(cnt, 30)
+        click.echo(f"  {click.style(rel, fg='blue'):<40} {cnt:3d}  {click.style(bar, fg='green')}")
+    click.echo()
+
+
+@cli.command()
+@click.option("--rel", default=None, help="Filter by relationship name")
+@click.option("--root", default=None, type=click.Path())
+def edges(rel, root):
+    """List all slug --[rel]--> slug triples in the graph."""
+    store = get_store(Path(root) if root else None)
+    all_edges = store.all_edges(rel=rel)
+    store.close()
+
+    if not all_edges:
+        msg = f"No edges with rel '{rel}'." if rel else "No edges found."
+        click.echo(msg)
+        return
+
+    click.echo()
+    if rel:
+        click.echo(click.style(f"Edges with rel '{rel}':", bold=True) + f"  ({len(all_edges)} edge(s))")
+    else:
+        click.echo(click.style("All edges:", bold=True) + f"  ({len(all_edges)} edge(s))")
+    click.echo()
+
+    for e in all_edges:
+        src = click.style(e["src"], fg="cyan")
+        rel_label = click.style(e["rel"], fg="blue")
+        dst = click.style(e["dst"], fg="cyan")
+        click.echo(f"  {src}  --[{rel_label}]-->  {dst}")
     click.echo()
 
 
