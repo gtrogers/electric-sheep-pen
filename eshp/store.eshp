@@ -19,7 +19,8 @@ Key methods:
   get_note(slug)       — returns note + edges_out + edges_in
   get_descs(slugs)     — returns {slug: desc} for bulk lookups (used by CLI)
   neighbours(slug, rel, depth) — BFS over edge table
-  list_by_tag(tag) / all_tags() / stats()
+  list_by_tag(tag) / all_tags() / all_rels() / stats()
+  all_edges(rel)   — all (src, rel, dst) triples; optional rel filter
 
 IMPORTANT: EshpStore does NOT auto-commit. Always call store.conn.commit()
 after upsert_note() / delete_note() in tests and production code.

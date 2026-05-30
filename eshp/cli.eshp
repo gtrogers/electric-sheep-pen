@@ -21,6 +21,8 @@ Commands:
   recall <slug>       full note + N closest related notes with body content
   tags                all tags with counts (bar chart)
   tag <tagname>       notes carrying a tag
+  rels                all relationship types with edge counts (bar chart)
+  edges [--rel REL]   all src --[rel]--> dst triples, optional rel filter
   graph <slug>        BFS neighbourhood, --depth, --rel filter
   stats               note/tag/edge counts
 
