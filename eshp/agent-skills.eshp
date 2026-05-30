@@ -1,0 +1,24 @@
+#cli #spec #workflow
+> Agent skill templates bundled with eshp for AI-assisted workflows.
+
+Two skill templates ship with eshp in the skills/ directory:
+
+  eshp--plan              Plan and design features using the eshp memory graph.
+                          Guides an agent to query eshp for context before implementing.
+  eshp--commit-and-dream  Commit WIP to git, then reflect on the session and
+                          update the memory graph. Prunes stale info too.
+
+init-skills command
+  eshp init-skills <path> [--force]
+  Copies all bundled skills to <path>/<skill-name>/SKILL.md.
+  Creates directories as needed. --force to overwrite existing files.
+  Templates live in skills/ next to eshp_cli.py (Path(__file__).parent / "skills").
+  Included in the wheel via pyproject.toml: include = ["skills/**"]
+
+Typical invocation:
+  eshp init-skills .github/skills          # GitHub Copilot agent
+  eshp init-skills .cursor/skills          # Cursor
+  eshp init-skills .rules/skills           # custom agents
+
+.related
+<- cli

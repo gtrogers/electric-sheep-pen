@@ -50,10 +50,12 @@ Full-text search over body text and slug names.
 - Repeat `--tag` to require multiple tags simultaneously
 - Default limit is 10
 
-### Tags
+### Tags and relationships
 ```
-eshp tags [--root PATH]          # all tags with note counts
-eshp tag  <tagname> [--root PATH]  # notes carrying a specific tag
+eshp tags [--root PATH]              # all tags with note counts
+eshp tag  <tagname> [--root PATH]    # notes carrying a specific tag
+eshp rels [--root PATH]              # all relationship types with edge counts
+eshp edges [--rel REL] [--root PATH] # all src --[rel]--> dst triples; optional rel filter
 ```
 `#` prefix on `<tagname>` is optional.
 
@@ -103,6 +105,8 @@ Free text body. Observations, decisions, warnings — anything useful.
 eshp search <current task keywords>   # find relevant prior notes
 eshp show <slug>                       # expand interesting hits
 eshp graph <slug> --depth 2           # explore connections
+eshp rels                              # understand how the graph is wired
+eshp edges --rel <rel>                 # trace a specific relationship type
 ```
 
 ### Writing a new memory

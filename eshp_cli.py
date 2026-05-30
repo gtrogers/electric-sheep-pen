@@ -15,9 +15,11 @@ Usage:
   eshp edges [--rel REL]             List all slug --[rel]--> slug triples
   eshp graph <slug> [--depth 2]      Show neighbourhood graph
   eshp stats                         DB statistics
+  eshp init-skills <path>            Copy agent skill templates to a directory
 """
 
 import os
+import shutil
 import subprocess
 import sys
 import time
@@ -497,6 +499,60 @@ def recall(slug, n, root):
             if rel_note["body"]:
                 click.echo(rel_note["body"])
             click.echo()
+
+
+def _skills_templates_dir() -> Path:
+    """Return the bundled skills/ templates directory (sits next to eshp_cli.py)."""
+    return Path(__file__).parent / "skills"
+
+
+@cli.command("init-skills")
+@click.argument("path", type=click.Path())
+@click.option("--force", is_flag=True, default=False, help="Overwrite existing skill files")
+def init_skills(path, force):
+    """Copy agent skill templates into PATH.
+
+    Creates one subdirectory per skill under PATH, each containing a SKILL.md.
+    Use --force to overwrite files that already exist.
+
+    Example paths:
+      .github/skills          (GitHub Copilot)
+      .cursor/skills          (Cursor)
+      .rules/skills           (custom agents)
+    """
+    templates_dir = _skills_templates_dir()
+    if not templates_dir.is_dir():
+        click.echo(click.style(f"Skills templates directory not found: {templates_dir}", fg="red"), err=True)
+        sys.exit(1)
+
+    dest = Path(path)
+    dest.mkdir(parents=True, exist_ok=True)
+
+    skills = sorted(p for p in templates_dir.iterdir() if p.is_dir())
+    if not skills:
+        click.echo(click.style("No skill templates found.", fg="yellow"))
+        return
+
+    click.echo()
+    for skill_src in skills:
+        skill_dest = dest / skill_src.name
+        skill_dest.mkdir(parents=True, exist_ok=True)
+        for src_file in skill_src.rglob("*"):
+            if not src_file.is_file():
+                continue
+            rel = src_file.relative_to(skill_src)
+            dst_file = skill_dest / rel
+            dst_file.parent.mkdir(parents=True, exist_ok=True)
+            if dst_file.exists() and not force:
+                click.echo(f"  {click.style('skip', fg='yellow')}  {dst_file}  (use --force to overwrite)")
+                continue
+            shutil.copy2(src_file, dst_file)
+            action = click.style("update" if dst_file.exists() else "create", fg="green")
+            click.echo(f"  {action}  {dst_file}")
+
+    click.echo()
+    click.echo(click.style(f"✓ Skills written to {dest}", fg="green"))
+    click.echo()
 
 
 if __name__ == "__main__":

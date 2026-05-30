@@ -18,7 +18,7 @@ eshp = "eshp_cli:cli"
 
 [tool.hatch.build.targets.wheel]
 sources = ["."]
-include = ["eshp_cli.py", "eshp_parser.py", "eshp_store.py"]
+include = ["eshp_cli.py", "eshp_parser.py", "eshp_store.py", "skills/**"]
 
 [project.optional-dependencies]
 dev = [
