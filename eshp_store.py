@@ -63,6 +63,11 @@ class EshpStore:
             self.conn.execute("ALTER TABLE notes ADD COLUMN desc TEXT DEFAULT ''")
         except Exception:
             pass
+        # Migrate existing DBs that predate the last_recalled_at column
+        try:
+            self.conn.execute("ALTER TABLE notes ADD COLUMN last_recalled_at TEXT DEFAULT NULL")
+        except Exception:
+            pass
         self.conn.commit()
 
     # ------------------------------------------------------------------ sync
@@ -242,6 +247,44 @@ class EshpStore:
             "notes": self.conn.execute("SELECT COUNT(*) FROM notes").fetchone()[0],
             "tags":  self.conn.execute("SELECT COUNT(DISTINCT tag) FROM tags").fetchone()[0],
             "edges": self.conn.execute("SELECT COUNT(*) FROM edges").fetchone()[0],
+        }
+
+    def record_recall(self, slug: str) -> None:
+        """Record that a note was recalled (updates last_recalled_at). Auto-commits."""
+        self.conn.execute(
+            "UPDATE notes SET last_recalled_at = datetime('now') WHERE slug = ?", (slug,)
+        )
+        self.conn.commit()
+
+    def summarise(self, top_n: int = 10) -> dict:
+        """Return a compact summary of the graph for agent context injection.
+
+        Returns a dict with:
+          stats          — note/tag/edge counts
+          top_tags       — [(tag, count), ...] top N by count
+          top_rels       — [(rel, count), ...] top N by count
+          recent_notes   — [{slug, desc, updated_at}, ...] most recently updated
+          recent_recalls — [{slug, desc, last_recalled_at}, ...] most recently recalled
+        """
+        return {
+            "stats": self.stats(),
+            "top_tags": self.all_tags()[:top_n],
+            "top_rels": self.all_rels()[:top_n],
+            "recent_notes": [
+                dict(r) for r in self.conn.execute(
+                    "SELECT slug, desc, updated_at FROM notes "
+                    "ORDER BY updated_at DESC LIMIT ?",
+                    (top_n,),
+                )
+            ],
+            "recent_recalls": [
+                dict(r) for r in self.conn.execute(
+                    "SELECT slug, desc, last_recalled_at FROM notes "
+                    "WHERE last_recalled_at IS NOT NULL "
+                    "ORDER BY last_recalled_at DESC LIMIT ?",
+                    (top_n,),
+                )
+            ],
         }
 
     def scan(self, query: str, limit: int = 20) -> list[dict]:

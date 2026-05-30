@@ -677,3 +677,107 @@ class TestAllEdges:
         store.sync()
 
         assert store.all_edges() == []
+
+
+# ──────────────────────────────────────────────────── record_recall / summarise
+
+class TestRecordRecall:
+    def test_sets_last_recalled_at(self, store, memo_dir):
+        make_note(memo_dir, "alpha")
+        store.sync()
+
+        row = store.conn.execute(
+            "SELECT last_recalled_at FROM notes WHERE slug='alpha'"
+        ).fetchone()
+        assert row["last_recalled_at"] is None
+
+        store.record_recall("alpha")
+
+        row = store.conn.execute(
+            "SELECT last_recalled_at FROM notes WHERE slug='alpha'"
+        ).fetchone()
+        assert row["last_recalled_at"] is not None
+
+    def test_updates_on_repeated_recall(self, store, memo_dir):
+        make_note(memo_dir, "alpha")
+        store.sync()
+        store.record_recall("alpha")
+        first = store.conn.execute(
+            "SELECT last_recalled_at FROM notes WHERE slug='alpha'"
+        ).fetchone()["last_recalled_at"]
+        store.record_recall("alpha")
+        second = store.conn.execute(
+            "SELECT last_recalled_at FROM notes WHERE slug='alpha'"
+        ).fetchone()["last_recalled_at"]
+        assert second >= first
+
+    def test_does_not_affect_other_notes(self, store, memo_dir):
+        make_note(memo_dir, "alpha")
+        make_note(memo_dir, "beta")
+        store.sync()
+        store.record_recall("alpha")
+        row = store.conn.execute(
+            "SELECT last_recalled_at FROM notes WHERE slug='beta'"
+        ).fetchone()
+        assert row["last_recalled_at"] is None
+
+
+class TestSummarise:
+    def test_returns_stats(self, store, memo_dir):
+        make_note(memo_dir, "alpha", tags=["svc"])
+        make_note(memo_dir, "beta", tags=["svc", "backend"])
+        rel = Relationship(name="depends-on", outgoing=["beta"])
+        make_note(memo_dir, "gamma", rels={"depends-on": rel})
+        store.sync()
+
+        result = store.summarise()
+        assert result["stats"]["notes"] == 3
+        assert result["stats"]["edges"] == 1
+
+    def test_top_tags_ordered(self, store, memo_dir):
+        make_note(memo_dir, "a", tags=["hot", "rare"])
+        make_note(memo_dir, "b", tags=["hot"])
+        make_note(memo_dir, "c", tags=["hot"])
+        store.sync()
+
+        result = store.summarise()
+        tags = [t for t, _ in result["top_tags"]]
+        assert tags[0] == "hot"
+
+    def test_recent_notes_ordered(self, store, memo_dir):
+        make_note(memo_dir, "alpha")
+        make_note(memo_dir, "beta")
+        store.sync()
+
+        result = store.summarise()
+        slugs = [n["slug"] for n in result["recent_notes"]]
+        assert "alpha" in slugs
+        assert "beta" in slugs
+
+    def test_recent_recalls_empty_initially(self, store, memo_dir):
+        make_note(memo_dir, "alpha")
+        store.sync()
+
+        result = store.summarise()
+        assert result["recent_recalls"] == []
+
+    def test_recent_recalls_populated_after_record(self, store, memo_dir):
+        make_note(memo_dir, "alpha", desc="Alpha desc.")
+        make_note(memo_dir, "beta", desc="Beta desc.")
+        store.sync()
+        store.record_recall("alpha")
+        store.record_recall("beta")
+
+        result = store.summarise()
+        recall_slugs = [n["slug"] for n in result["recent_recalls"]]
+        assert "alpha" in recall_slugs
+        assert "beta" in recall_slugs
+
+    def test_top_n_respected(self, store, memo_dir):
+        for i in range(5):
+            make_note(memo_dir, f"note-{i}", tags=[f"tag-{i}"])
+        store.sync()
+
+        result = store.summarise(top_n=2)
+        assert len(result["recent_notes"]) <= 2
+        assert len(result["top_tags"]) <= 2

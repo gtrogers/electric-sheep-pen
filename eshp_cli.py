@@ -16,6 +16,7 @@ Usage:
   eshp graph <slug> [--depth 2]      Show neighbourhood graph
   eshp stats                         DB statistics
   eshp init-skills <path>            Copy agent skill templates to a directory
+  eshp summarise [--top N]           Compact graph summary for agent context injection
 """
 
 import os
@@ -458,11 +459,14 @@ def recall(slug, n, root):
     """
     store = get_store(Path(root) if root else None)
     result = store.recall(slug, n=n)
-    store.close()
 
     if result is None:
+        store.close()
         click.echo(click.style(f"Note '{slug}' not found. Is `eshp watch` running?", fg="red"))
         sys.exit(1)
+
+    store.record_recall(slug)
+    store.close()
 
     note = result["note"]
     related = result["related"]
@@ -499,6 +503,69 @@ def recall(slug, n, root):
             if rel_note["body"]:
                 click.echo(rel_note["body"])
             click.echo()
+
+
+@cli.command()
+@click.option("--top", "-n", default=10, show_default=True, help="Items per section")
+@click.option("--root", default=None, type=click.Path())
+def summarise(top, root):
+    """Compact graph summary for agent context injection.
+
+    Outputs total graph size, top tags, top relationship types, most recently
+    updated notes, and most recently recalled notes. Pipe this into an agent
+    session to avoid starting from cold.
+    """
+    store = get_store(Path(root) if root else None)
+    data = store.summarise(top_n=top)
+    store.close()
+
+    s = data["stats"]
+    click.echo()
+    click.echo(
+        click.style("eshp memory graph", bold=True)
+        + f"  ·  {click.style(str(s['notes']), fg='cyan')} notes"
+        + f"  ·  {click.style(str(s['edges']), fg='green')} edges"
+        + f"  ·  {click.style(str(s['tags']), fg='yellow')} unique tags"
+    )
+    click.echo()
+
+    if data["top_tags"]:
+        tag_parts = [
+            f"{click.style('#' + tag, fg='yellow')} ({cnt})"
+            for tag, cnt in data["top_tags"]
+        ]
+        click.echo(click.style("Top tags:", fg="white", bold=True))
+        click.echo("  " + "  ".join(tag_parts))
+        click.echo()
+
+    if data["top_rels"]:
+        rel_parts = [
+            f"{click.style(rel, fg='blue')} ({cnt})"
+            for rel, cnt in data["top_rels"]
+        ]
+        click.echo(click.style("Top relationships:", fg="white", bold=True))
+        click.echo("  " + "  ".join(rel_parts))
+        click.echo()
+
+    if data["recent_notes"]:
+        click.echo(click.style("Recent notes:", fg="white", bold=True))
+        for n in data["recent_notes"]:
+            slug_str = click.style(f"{n['slug']:<30}", fg="cyan")
+            desc_str = click.style((n["desc"] or "")[:60], fg="white", dim=True)
+            click.echo(f"  {slug_str}  {desc_str}")
+        click.echo()
+
+    if data["recent_recalls"]:
+        click.echo(click.style("Recently recalled:", fg="white", bold=True))
+        for n in data["recent_recalls"]:
+            slug_str = click.style(f"{n['slug']:<30}", fg="cyan")
+            desc_str = click.style((n["desc"] or "")[:60], fg="white", dim=True)
+            click.echo(f"  {slug_str}  {desc_str}")
+        click.echo()
+    else:
+        click.echo(click.style("Recently recalled:", fg="white", bold=True))
+        click.echo(click.style("  (none yet — use `eshp recall <slug>` to build history)", dim=True))
+        click.echo()
 
 
 def _skills_templates_dir() -> Path:

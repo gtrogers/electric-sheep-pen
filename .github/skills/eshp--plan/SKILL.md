@@ -19,7 +19,8 @@ they want to make.
 
 ## Procedure
 
-- Read the plan
+- Run `eshp summarise` first for a warm-start overview of the graph:
+  total size, top tags, top relationships, recent and recently recalled entries
 - Query eshp to get relevant context:
   - `eshp scan <query>` broad discovery — FTS + tag names + 1-hop relation expansion; best starting point
   - `eshp recall <slug>` focused context load — full note + N closest related notes with body content

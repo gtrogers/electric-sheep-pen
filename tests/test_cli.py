@@ -91,3 +91,54 @@ class TestInitSkills:
         assert len(skills) >= 2, "Expected at least 2 skill templates"
         for skill in skills:
             assert (skill / "SKILL.md").exists(), f"Missing SKILL.md in {skill}"
+
+
+# ──────────────────────────────────────────────────── summarise command
+
+class TestSummariseCommand:
+    def _make_store(self, tmp_path):
+        from eshp_store import EshpStore
+        from eshp_parser import EshpNote, Relationship
+        from eshp_parser import render_eshp
+        d = tmp_path / "eshp"
+        d.mkdir()
+        store = EshpStore(d)
+        for slug, tags in [("alpha", ["mod"]), ("beta", ["mod", "svc"]), ("gamma", [])]:
+            note = EshpNote(
+                path=d / f"{slug}.eshp",
+                slug=slug, tags=tags, desc=f"{slug} desc", body="", relationships={}
+            )
+            note.path.write_text(render_eshp(note), encoding="utf-8")
+        store.sync()
+        store.close()
+        return d
+
+    def test_summarise_exits_ok(self, runner, tmp_path):
+        d = self._make_store(tmp_path)
+        result = runner.invoke(cli, ["summarise", "--root", str(d)])
+        assert result.exit_code == 0
+
+    def test_summarise_shows_stats(self, runner, tmp_path):
+        d = self._make_store(tmp_path)
+        result = runner.invoke(cli, ["summarise", "--root", str(d)])
+        assert "3" in result.output  # 3 notes
+
+    def test_summarise_shows_tags(self, runner, tmp_path):
+        d = self._make_store(tmp_path)
+        result = runner.invoke(cli, ["summarise", "--root", str(d)])
+        assert "mod" in result.output
+
+    def test_summarise_shows_recent_notes(self, runner, tmp_path):
+        d = self._make_store(tmp_path)
+        result = runner.invoke(cli, ["summarise", "--root", str(d)])
+        assert "alpha" in result.output
+
+    def test_summarise_no_recall_message(self, runner, tmp_path):
+        d = self._make_store(tmp_path)
+        result = runner.invoke(cli, ["summarise", "--root", str(d)])
+        assert "none yet" in result.output
+
+    def test_summarise_top_flag(self, runner, tmp_path):
+        d = self._make_store(tmp_path)
+        result = runner.invoke(cli, ["summarise", "--root", str(d), "--top", "1"])
+        assert result.exit_code == 0

@@ -26,6 +26,7 @@ Commands:
   graph <slug>        BFS neighbourhood, --depth, --rel filter
   stats               note/tag/edge counts
   init-skills <path>  copy bundled agent skill templates into path/
+  summarise           compact graph summary for agent context injection
 
 .part-of
 -> architecture

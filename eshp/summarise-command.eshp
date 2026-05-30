@@ -1,0 +1,30 @@
+#cli #spec
+> summarise command — compact graph overview for agent context injection.
+
+eshp summarise [--top N] [--root PATH]
+
+Outputs a warm-start summary of the memory graph:
+  - Total size: note count, edge count, unique tag count
+  - Top N tags by note count
+  - Top N relationship types by edge count
+  - Most recently updated notes (by updated_at)
+  - Most recently recalled notes (by last_recalled_at — only populated
+    when `eshp recall` has been called in this environment)
+
+Designed to be injected into an agent session context at startup so the
+agent doesn't start cold. The output is plain text, suitable for piping
+into an LLM context window.
+
+last_recalled_at tracking
+  Every call to `eshp recall <slug>` updates last_recalled_at in the notes
+  table. This is metadata — lives only in .eshp.db (gitignored), never in
+  .eshp files. No git conflicts, no accidental commits.
+
+Store methods:
+  store.record_recall(slug)     — touch last_recalled_at, auto-commits
+  store.summarise(top_n=10)     — returns dict: stats, top_tags, top_rels,
+                                  recent_notes, recent_recalls
+
+.related
+<- cli
+-> store
