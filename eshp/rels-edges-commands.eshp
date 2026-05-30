@@ -16,3 +16,4 @@ edges [--rel REL]
 
 .related
 <- cli
+-> store

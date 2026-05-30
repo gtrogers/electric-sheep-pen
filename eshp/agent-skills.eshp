@@ -20,5 +20,9 @@ Typical invocation:
   eshp init-skills .cursor/skills          # Cursor
   eshp init-skills .rules/skills           # custom agents
 
+Note: skills/ at the repo root is the canonical template source.
+.github/skills/ in this repo is an example instantiation of those templates.
+When templates are updated, re-run init-skills to propagate changes.
+
 .related
 <- cli

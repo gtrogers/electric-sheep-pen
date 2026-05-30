@@ -19,6 +19,12 @@ Query the memory graph:
   eshp recall <slug>       focused context load (full note + N related)
   eshp show <slug>         single note with edges
   eshp tag <tagname>       notes by tag
+  eshp rels                all relationship types with counts
+  eshp edges [--rel REL]   all src --[rel]--> dst triples
+
+Bootstrap skills for an AI agent:
+  eshp init-skills .github/skills    # GitHub Copilot
+  eshp init-skills .cursor/skills    # Cursor (or any agent path)
 
 The DB (.eshp.db) lives inside the eshp/ directory.
 It is gitignored — regenerated from .eshp files via `eshp watch` or sync().
@@ -26,6 +32,7 @@ It is gitignored — regenerated from .eshp files via `eshp watch` or sync().
 Key test files:
   tests/test_parser.py  — parser + render tests
   tests/test_store.py   — store upsert/delete/query tests
+  tests/test_cli.py     — CLI command tests (init-skills)
 
 .related
 -> conventions
