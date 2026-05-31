@@ -242,6 +242,38 @@ class EshpStore:
             )
         return [dict(r) for r in rows]
 
+    def subgraph(self, slug: str, rels: Optional[list] = None, depth: int = 3) -> list[dict]:
+        """Forward-only BFS from slug, optionally filtered to specific relationship types.
+
+        Returns list of {src, rel, dst, hop} where hop is the 1-based traversal depth.
+        Only follows edges where src is in the current frontier (forward direction).
+        Edges to already-visited nodes are included but those nodes are not expanded.
+        """
+        visited = {slug}
+        frontier = {slug}
+        result = []
+
+        for hop in range(1, depth + 1):
+            if not frontier:
+                break
+            placeholders = ",".join("?" * len(frontier))
+            rows = self.conn.execute(
+                f"SELECT src, rel, dst FROM edges WHERE src IN ({placeholders})",
+                list(frontier),
+            )
+            next_frontier = set()
+            for row in rows:
+                r = dict(row)
+                if rels and r["rel"] not in rels:
+                    continue
+                result.append({**r, "hop": hop})
+                if r["dst"] not in visited:
+                    visited.add(r["dst"])
+                    next_frontier.add(r["dst"])
+            frontier = next_frontier
+
+        return result
+
     def stats(self) -> dict:
         return {
             "notes": self.conn.execute("SELECT COUNT(*) FROM notes").fetchone()[0],

@@ -781,3 +781,104 @@ class TestSummarise:
         result = store.summarise(top_n=2)
         assert len(result["recent_notes"]) <= 2
         assert len(result["top_tags"]) <= 2
+
+
+class TestSubgraph:
+    def _setup_chain(self, store, memo_dir):
+        """A → B → C → D, plus A → E (different rel)."""
+        from eshp_parser import Relationship
+        def dep(targets):
+            return {"depends-on": Relationship("depends-on", outgoing=targets, incoming=[])}
+        def rel_of(targets):
+            return {"part-of": Relationship("part-of", outgoing=targets, incoming=[])}
+
+        make_note(memo_dir, "a", rels=dep(["b", "e"]))
+        make_note(memo_dir, "b", rels=dep(["c"]))
+        make_note(memo_dir, "c", rels=dep(["d"]))
+        make_note(memo_dir, "d")
+        make_note(memo_dir, "e", rels=rel_of(["f"]))
+        make_note(memo_dir, "f")
+        store.sync()
+
+    def test_forward_only(self, store, memo_dir):
+        """Only edges where src is in frontier are followed; incoming edges are ignored."""
+        from eshp_parser import Relationship
+        make_note(memo_dir, "root", rels={"depends-on": Relationship("depends-on", outgoing=["child"], incoming=[])})
+        make_note(memo_dir, "child")
+        make_note(memo_dir, "unrelated", rels={"depends-on": Relationship("depends-on", outgoing=["root"], incoming=[])})
+        store.sync()
+
+        result = store.subgraph("root", depth=2)
+        srcs = {e["src"] for e in result}
+        assert "unrelated" not in srcs  # unrelated → root is backward, must not appear
+
+    def test_returns_direct_neighbours(self, store, memo_dir):
+        self._setup_chain(store, memo_dir)
+        result = store.subgraph("a", depth=1)
+        edges = {(e["src"], e["dst"]) for e in result}
+        assert ("a", "b") in edges
+        assert ("a", "e") in edges
+        assert all(e["hop"] == 1 for e in result)
+
+    def test_depth_limits_traversal(self, store, memo_dir):
+        self._setup_chain(store, memo_dir)
+        result = store.subgraph("a", depth=1)
+        dsts = {e["dst"] for e in result}
+        assert "c" not in dsts  # c is 2 hops away
+
+    def test_hop_field_tracks_depth(self, store, memo_dir):
+        self._setup_chain(store, memo_dir)
+        result = store.subgraph("a", depth=3)
+        by_dst = {e["dst"]: e["hop"] for e in result}
+        assert by_dst["b"] == 1
+        assert by_dst["c"] == 2
+        assert by_dst["d"] == 3
+
+    def test_rel_filter_single(self, store, memo_dir):
+        self._setup_chain(store, memo_dir)
+        result = store.subgraph("a", rels=["depends-on"], depth=2)
+        rels_seen = {e["rel"] for e in result}
+        assert rels_seen == {"depends-on"}
+        dsts = {e["dst"] for e in result}
+        assert "e" in dsts  # a→e is depends-on
+        assert "f" not in dsts  # e→f is part-of, filtered out
+
+    def test_rel_filter_multiple(self, store, memo_dir):
+        self._setup_chain(store, memo_dir)
+        result = store.subgraph("a", rels=["depends-on", "part-of"], depth=2)
+        rels_seen = {e["rel"] for e in result}
+        assert "depends-on" in rels_seen
+        assert "part-of" in rels_seen
+        dsts = {e["dst"] for e in result}
+        assert "f" in dsts  # e→f via part-of
+
+    def test_no_rel_filter_follows_all(self, store, memo_dir):
+        self._setup_chain(store, memo_dir)
+        result = store.subgraph("a", rels=None, depth=2)
+        dsts = {e["dst"] for e in result}
+        assert "f" in dsts  # follows part-of too
+
+    def test_diamond_included_once_in_frontier(self, store, memo_dir):
+        """Both B→D and C→D are returned, but D only appears once as an expansion node."""
+        from eshp_parser import Relationship
+        def dep(targets):
+            return {"depends-on": Relationship("depends-on", outgoing=targets, incoming=[])}
+        make_note(memo_dir, "a", rels=dep(["b", "c"]))
+        make_note(memo_dir, "b", rels=dep(["d"]))
+        make_note(memo_dir, "c", rels=dep(["d"]))
+        make_note(memo_dir, "d")
+        store.sync()
+
+        result = store.subgraph("a", depth=3)
+        # D is reachable twice (via B and C) — both edges appear in result
+        d_edges = [e for e in result if e["dst"] == "d"]
+        assert len(d_edges) == 2
+        # But no edges should have D as src (it was only added to frontier once)
+        d_src_edges = [e for e in result if e["src"] == "d"]
+        assert d_src_edges == []
+
+    def test_empty_graph_returns_no_edges(self, store, memo_dir):
+        make_note(memo_dir, "isolated")
+        store.sync()
+        result = store.subgraph("isolated", depth=3)
+        assert result == []

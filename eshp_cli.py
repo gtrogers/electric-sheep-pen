@@ -399,6 +399,83 @@ def graph(slug, depth, rel, root):
 
 
 @cli.command()
+@click.argument("slug")
+@click.option("--rel", "rels", multiple=True, help="Relationship type(s) to traverse (repeat for multiple). Default: all.")
+@click.option("--depth", "-d", default=3, show_default=True, help="Maximum traversal depth.")
+@click.option("--root", default=None, type=click.Path())
+def subgraph(slug, rels, depth, root):
+    """Show a directed subgraph rooted at SLUG as an indented tree.
+
+    Traverses forward edges only (src → dst). Use --rel to restrict which
+    relationship types are followed; omit --rel to follow all types.
+    Repeat --rel to traverse multiple relationship types:
+
+        eshp subgraph feature-x --rel depends-on --rel blocks
+    """
+    store = get_store(Path(root) if root else None)
+    note = store.get_note(slug)
+
+    if not note:
+        click.echo(click.style(f"Note '{slug}' not found.", fg="red"))
+        store.close()
+        sys.exit(1)
+
+    rels_filter = list(rels) if rels else None
+    edges = store.subgraph(slug, rels=rels_filter, depth=depth)
+
+    # Collect all nodes for desc lookup
+    nodes = {slug}
+    for e in edges:
+        nodes.add(e["src"])
+        nodes.add(e["dst"])
+
+    descs = store.get_descs(list(nodes))
+    store.close()
+
+    # Build src → [(rel, dst)] map for tree rendering
+    from collections import defaultdict
+    children = defaultdict(list)
+    for e in edges:
+        children[e["src"]].append((e["rel"], e["dst"]))
+
+    rel_header = f"  rel: {', '.join(rels_filter)}" if rels_filter else ""
+    click.echo()
+    click.echo(
+        click.style(slug, fg="cyan", bold=True)
+        + click.style(f"  (depth={depth}){rel_header}", fg="white", dim=True)
+    )
+
+    seen = {slug}
+
+    def print_children(node: str, indent: int) -> None:
+        pad = "  " * indent
+        for rel_name, child in children[node]:
+            rel_label = click.style(rel_name, fg="blue")
+            arrow = f"{pad}  ──[{rel_label}]──▶  "
+            if child in seen:
+                child_label = click.style(child, fg="cyan") + click.style("  [↑ already shown]", fg="white", dim=True)
+                click.echo(arrow + child_label)
+            else:
+                seen.add(child)
+                desc = descs.get(child, "")
+                child_label = click.style(child, fg="cyan")
+                if desc:
+                    child_label += click.style(f"  {desc}", fg="white", dim=True)
+                click.echo(arrow + child_label)
+                print_children(child, indent + 1)
+
+    print_children(slug, 0)
+
+    if not edges:
+        click.echo(click.style("  (no edges found)", fg="white", dim=True))
+
+    total_nodes = len(nodes) - 1  # exclude root
+    click.echo()
+    click.echo(click.style(f"{total_nodes} node(s) reached, {len(edges)} edge(s) traversed", fg="white", dim=True))
+    click.echo()
+
+
+@cli.command()
 @click.option("--root", default=None, type=click.Path())
 def stats(root):
     """Show DB statistics."""

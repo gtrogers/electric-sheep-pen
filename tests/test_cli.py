@@ -142,3 +142,98 @@ class TestSummariseCommand:
         d = self._make_store(tmp_path)
         result = runner.invoke(cli, ["summarise", "--root", str(d), "--top", "1"])
         assert result.exit_code == 0
+
+
+class TestSubgraphCommand:
+    def _make_store(self, tmp_path):
+        from eshp_parser import EshpNote, Relationship, render_eshp
+        from eshp_store import EshpStore
+
+        d = tmp_path / "eshp"
+        d.mkdir()
+
+        def make(slug, rels=None):
+            r = rels or {}
+            note = EshpNote(
+                path=d / f"{slug}.eshp",
+                slug=slug,
+                tags=[],
+                desc=f"{slug} description",
+                body="",
+                relationships=r,
+            )
+            note.path.write_text(render_eshp(note), encoding="utf-8")
+            return note
+
+        def dep(targets):
+            return {"depends-on": Relationship("depends-on", outgoing=targets, incoming=[])}
+
+        store = EshpStore(d)
+        for note in [make("root", dep(["child-a", "child-b"])), make("child-a", dep(["grandchild"])), make("child-b"), make("grandchild")]:
+            store.upsert_note(note)
+        store.conn.commit()
+        store.close()
+        return d
+
+    def test_basic_output_contains_root_and_children(self, runner, tmp_path):
+        d = self._make_store(tmp_path)
+        result = runner.invoke(cli, ["subgraph", "root", "--root", str(d)])
+        assert result.exit_code == 0
+        assert "root" in result.output
+        assert "child-a" in result.output
+        assert "child-b" in result.output
+
+    def test_output_contains_grandchild(self, runner, tmp_path):
+        d = self._make_store(tmp_path)
+        result = runner.invoke(cli, ["subgraph", "root", "--root", str(d)])
+        assert "grandchild" in result.output
+
+    def test_rel_filter_limits_output(self, runner, tmp_path):
+        from eshp_parser import EshpNote, Relationship, render_eshp
+        from eshp_store import EshpStore
+
+        d = tmp_path / "eshp"
+        d.mkdir()
+        store = EshpStore(d)
+
+        def make(slug, rels):
+            note = EshpNote(path=d / f"{slug}.eshp", slug=slug, tags=[], desc="", body="", relationships=rels)
+            note.path.write_text(render_eshp(note), encoding="utf-8")
+            return note
+
+        store.upsert_note(make("root", {
+            "depends-on": Relationship("depends-on", outgoing=["dep-child"], incoming=[]),
+            "related": Relationship("related", outgoing=["rel-child"], incoming=[]),
+        }))
+        store.upsert_note(make("dep-child", {}))
+        store.upsert_note(make("rel-child", {}))
+        store.conn.commit()
+        store.close()
+
+        result = runner.invoke(cli, ["subgraph", "root", "--rel", "depends-on", "--root", str(d)])
+        assert "dep-child" in result.output
+        assert "rel-child" not in result.output
+
+    def test_multiple_rels_option(self, runner, tmp_path):
+        d = self._make_store(tmp_path)
+        result = runner.invoke(cli, ["subgraph", "root", "--rel", "depends-on", "--rel", "related", "--root", str(d)])
+        assert result.exit_code == 0
+        assert "child-a" in result.output
+
+    def test_missing_slug_exits_nonzero(self, runner, tmp_path):
+        d = self._make_store(tmp_path)
+        result = runner.invoke(cli, ["subgraph", "no-such-slug", "--root", str(d)])
+        assert result.exit_code != 0
+
+    def test_isolated_node_shows_no_edges(self, runner, tmp_path):
+        d = self._make_store(tmp_path)
+        result = runner.invoke(cli, ["subgraph", "child-b", "--root", str(d)])
+        assert result.exit_code == 0
+        assert "no edges found" in result.output
+
+    def test_depth_option_limits_traversal(self, runner, tmp_path):
+        d = self._make_store(tmp_path)
+        result = runner.invoke(cli, ["subgraph", "root", "--depth", "1", "--root", str(d)])
+        assert result.exit_code == 0
+        assert "child-a" in result.output
+        assert "grandchild" not in result.output
