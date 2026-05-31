@@ -19,6 +19,7 @@ a memory via `recall`, `scan`, etc.
 ### New files
 - `eshp_server.py` — HTTP request handler (stdlib http.server), SSE logic, API routes
 - `eshp/static/index.html` — Single-page app: cytoscape.js + SSE listener
+- `eshp/static/cytoscape.min.js` — bundled cytoscape.js (do NOT load from CDN — supply chain risk)
 - pyproject.toml package data entry for `eshp/static/`
 
 ### New CLI command
@@ -77,7 +78,8 @@ Pure frontend:
 ZERO new required dependencies — http.server + threading are stdlib.
 Optional: could swap http.server for Flask later for cleaner code, but not needed for MVP.
 
-Cytoscape.js loaded from CDN; if offline use is required, bundle as package data.
+Cytoscape.js MUST be bundled as package data (supply chain risk — do not load from CDN).
+Download the minified build and ship as `eshp/static/cytoscape.min.js`.
 
 ## Package data change needed
 
@@ -94,8 +96,7 @@ include = ["eshp_cli.py", "eshp_parser.py", "eshp_store.py", "eshp_server.py", "
   Do NOT share the EshpStore instance across threads.
 - **SSE client accumulation**: if many clients connect without disconnecting, the poll
   loop multiplies. Keep a set of active response objects; prune on broken pipe.
-- **CDN dependency**: cytoscape.js from CDN means the web view needs internet on
-  first load. Mitigation: bundle the minified JS as package data.
+- **CDN dependency**: RESOLVED — bundle cytoscape.min.js as package data (supply chain safety).
 - **Port conflicts**: default port 7842 is obscure enough; still expose --port flag.
 - **Large graphs**: cytoscape.js handles ~1000 nodes fine with a force-directed layout
   (cose or cola). Above that, consider filtered views (tag filter, depth limit).
@@ -111,9 +112,9 @@ include = ["eshp_cli.py", "eshp_parser.py", "eshp_store.py", "eshp_server.py", "
 
 ## Open questions
 
-1. Should `serve` also run the watchdog (like `watch`) so graph auto-updates on file saves?
-   Probably yes — otherwise graph data goes stale while serving.
-2. Should we bundle cytoscape.js or always use CDN?
+1. DECIDED: `serve` runs the watchdog (full sync on startup, file watcher while serving) —
+   same behaviour as `watch`, so the graph stays live while the browser is open.
+2. DECIDED: Bundle cytoscape.js as `eshp/static/cytoscape.min.js` — no CDN (supply chain safety).
 3. Layout algorithm: `cose` (built-in, no extra dep) vs `cola` (needs cytoscape-cola extension)?
    `cose` is the safe default.
 4. Should node colour encode something (e.g. tag category, recency)?
