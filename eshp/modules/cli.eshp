@@ -33,6 +33,12 @@ Commands:
   init-skills <path>  copy bundled agent skill templates into path/
   summarise           compact graph summary for agent context injection
 
+TRAP — new commands MUST have @cli.command() decorator:
+  Adding a function to eshp_cli.py without @cli.command() silently registers nothing.
+  The command appears to exist in source but 'eshp <cmd>' returns 'No such command'.
+  This happened to `eshp new` and went undetected until scenario tests were written.
+  Always verify with: python3 -c "from eshp_cli import cli; print(list(cli.commands))"
+
 .part-of
 -> modules/architecture
 

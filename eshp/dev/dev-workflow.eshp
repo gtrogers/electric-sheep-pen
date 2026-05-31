@@ -36,10 +36,11 @@ The DB (.eshp.db) lives inside the eshp/ directory.
 It is gitignored — regenerated from .eshp files via `eshp watch` or sync().
 
 Key test files:
-  tests/test_parser.py  — parser + render tests
-  tests/test_store.py   — store upsert/delete/query/summarise tests
-  tests/test_cli.py     — CLI command tests (init-skills, summarise)
-  tests/test_server.py  — HTTP server route tests (starts real server on random port)
+  tests/test_parser.py    — parser + render tests
+  tests/test_store.py     — store upsert/delete/query/summarise tests
+  tests/test_cli.py       — CLI command tests (init-skills, summarise, graph)
+  tests/test_server.py    — HTTP server route tests (starts real server on random port)
+  tests/test_scenarios.py — scenario/E2E tests: watchdog, file→sync→CLI, file→sync→API, SSE recall
 
 .related
 -> dev/conventions
