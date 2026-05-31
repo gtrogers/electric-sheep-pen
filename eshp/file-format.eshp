@@ -24,6 +24,9 @@ Rules:
 - A line starting with . (but not ..) opens a named relationship block
 - -> lines inside a rel block = outgoing edges
 - <- lines inside a rel block = incoming edges (stored reversed in DB)
+  TRAP: <- takes ONLY the slug, never the rel name.
+    ✓  <- other-slug
+    ✗  <- related other-slug   ← this stores "related other-slug" as the src slug (ghost node!)
 - A blank line ends a relationship block; content after goes back to body
 - Slugs are kebab-case; the filename without .eshp is the slug
 - Tags: # prefix only in file, stripped everywhere else (DB, EshpNote.tags)

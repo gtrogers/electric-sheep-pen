@@ -15,9 +15,15 @@ So a <- source line in note X is stored as: INSERT INTO edges(src=source, rel=..
 This means you can declare a relationship from either side of the link,
 but the DB always represents it as src → dst.
 
-upsert_note() only deletes edges WHERE src=slug before re-inserting.
-It does NOT delete edges pointed at this note from other notes.
-Edges declared via <- in this file ARE re-inserted as forward edges during upsert.
+upsert_note() deletes edges WHERE src=slug before re-inserting (outgoing).
+It also deletes orphan incoming edges: WHERE dst=slug AND src NOT IN (SELECT slug FROM notes).
+This means malformed <- lines (ghost src slugs) self-heal on the next sync.
+It does NOT delete valid edges pointed at this note by other notes (those persist).
+
+TRAP: If you write '<- rel slug' instead of '<- slug', the whole string 'rel slug'
+becomes the src — creating a ghost node with a space in its slug. It won't appear
+in the notes table so cytoscape (and anything else iterating notes) will miss it.
+The orphan cleanup in upsert_note catches this on re-sync.
 
 .related
 -> store

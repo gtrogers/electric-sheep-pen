@@ -8,6 +8,8 @@ Routes:
   GET /                   → serve eshp/static/index.html
   GET /cytoscape.min.js   → serve bundled cytoscape.js (v3.33.4, no CDN — supply chain safety)
   GET /api/graph          → JSON: {elements: [...]} in cytoscape format (all notes + edges)
+                            NOTE: edges where src or dst has no matching node are silently
+                            filtered out — guards against ghost slugs crashing cytoscape
   GET /api/note/<slug>    → JSON: {slug, desc, body, tags, edges_out, edges_in}
   GET /events             → SSE stream: {"slug": "...", "type": "recall"} on every recall
 
