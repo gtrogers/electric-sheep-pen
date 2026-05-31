@@ -11,11 +11,22 @@ Routes:
 
 import json
 import sqlite3
+import sys
 import time
 from http.server import BaseHTTPRequestHandler, HTTPServer, ThreadingHTTPServer
 from pathlib import Path
 
 _STATIC_DIR = Path(__file__).parent / "eshp" / "static"
+_PEER_RESET_ERRORS = (ConnectionResetError, BrokenPipeError)
+
+
+class _EshpHTTPServer(ThreadingHTTPServer):
+    """ThreadingHTTPServer that silently drops connection-reset noise."""
+
+    def handle_error(self, request, client_address):
+        if isinstance(sys.exc_info()[1], _PEER_RESET_ERRORS):
+            return
+        super().handle_error(request, client_address)
 
 
 class EshpRequestHandler(BaseHTTPRequestHandler):
@@ -156,8 +167,8 @@ class EshpRequestHandler(BaseHTTPRequestHandler):
         pass  # suppress default request logging
 
 
-def make_server(eshp_root: Path, host: str = "127.0.0.1", port: int = 7842) -> ThreadingHTTPServer:
+def make_server(eshp_root: Path, host: str = "127.0.0.1", port: int = 7842) -> _EshpHTTPServer:
     """Create (but do not start) a ThreadingHTTPServer bound to eshp_root's DB."""
-    server = ThreadingHTTPServer((host, port), EshpRequestHandler)
+    server = _EshpHTTPServer((host, port), EshpRequestHandler)
     server.db_path = eshp_root / ".eshp.db"
     return server
