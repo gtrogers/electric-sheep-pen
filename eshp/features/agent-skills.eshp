@@ -1,7 +1,7 @@
 #cli #spec #workflow
 > Agent skill templates bundled with eshp for AI-assisted workflows.
 
-Three skill templates ship with eshp in the skills/ directory:
+Four skill templates ship with eshp in the skills/ directory:
 
   eshp--plan              Plan and design features using the eshp memory graph.
                           Guides an agent to query eshp for context before implementing.
@@ -10,6 +10,9 @@ Three skill templates ship with eshp in the skills/ directory:
   eshp--deep-dream        Deep maintenance pass on the memory graph. Checks graph
                           accuracy against the codebase, consolidates tags/rels,
                           adds missing entries, then commits updated memory files.
+  eshp--explain           Answer questions and explain concepts by querying the memory
+                          graph with scan + recall before responding. Cites source notes.
+                          Covers "how does X work", "why", and "how do I do X" questions.
 
 init-skills command
   eshp init-skills <path> [--force]
