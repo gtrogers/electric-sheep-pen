@@ -16,14 +16,26 @@ This means you can declare a relationship from either side of the link,
 but the DB always represents it as src → dst.
 
 upsert_note() deletes edges WHERE src=slug before re-inserting (outgoing).
-It also deletes orphan incoming edges: WHERE dst=slug AND src NOT IN (SELECT slug FROM notes).
-This means malformed <- lines (ghost src slugs) self-heal on the next sync.
+Declarations are tracked in two tables:
+  decl_outgoing(declaring_slug, rel, target_slug)  — for -> edges
+  decl_incoming(declaring_slug, rel, source_slug)  — for <- edges
+This allows edges from EITHER side of a declaration to survive re-syncs correctly.
+
+On upsert of X:
+  1. DELETE edges WHERE src=X
+  2. Clear X's decl_outgoing / decl_incoming rows
+  3. Re-insert X's -> and <- declarations
+  4. Re-apply any OTHER notes' decl_incoming WHERE source_slug=X → restores edges
+     that those notes declared pointing TO them FROM X (survives X's resync)
+  5. Prune edges that X used to claim via <- but no longer does, IF the source
+     note doesn't independently declare them via decl_outgoing
+
 It does NOT delete valid edges pointed at this note by other notes (those persist).
 
 TRAP: If you write '<- rel slug' instead of '<- slug', the whole string 'rel slug'
 becomes the src — creating a ghost node with a space in its slug. It won't appear
 in the notes table so cytoscape (and anything else iterating notes) will miss it.
-The orphan cleanup in upsert_note catches this on re-sync.
+Caught by the diagnose dangling_edges check.
 
 .related
 -> store

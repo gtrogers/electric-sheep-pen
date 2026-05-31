@@ -54,9 +54,23 @@ class EshpStore:
                 dst  TEXT,
                 PRIMARY KEY (src, rel, dst)
             );
-            CREATE INDEX IF NOT EXISTS idx_tags_tag  ON tags(tag);
-            CREATE INDEX IF NOT EXISTS idx_edges_src ON edges(src);
-            CREATE INDEX IF NOT EXISTS idx_edges_dst ON edges(dst);
+            CREATE TABLE IF NOT EXISTS decl_outgoing (
+                declaring_slug  TEXT,
+                rel             TEXT,
+                target_slug     TEXT,
+                PRIMARY KEY (declaring_slug, rel, target_slug)
+            );
+            CREATE TABLE IF NOT EXISTS decl_incoming (
+                declaring_slug  TEXT,
+                rel             TEXT,
+                source_slug     TEXT,
+                PRIMARY KEY (declaring_slug, rel, source_slug)
+            );
+            CREATE INDEX IF NOT EXISTS idx_tags_tag       ON tags(tag);
+            CREATE INDEX IF NOT EXISTS idx_edges_src      ON edges(src);
+            CREATE INDEX IF NOT EXISTS idx_edges_dst      ON edges(dst);
+            CREATE INDEX IF NOT EXISTS idx_decl_out_src   ON decl_outgoing(declaring_slug);
+            CREATE INDEX IF NOT EXISTS idx_decl_in_source ON decl_incoming(source_slug);
         """)
         # Migrate existing DBs that predate the desc column
         try:
@@ -103,31 +117,77 @@ class EshpStore:
         )
         c.execute("DELETE FROM tags  WHERE slug=?", (note.slug,))
         c.execute("DELETE FROM edges WHERE src=?",  (note.slug,))
-        # Clean orphan incoming edges (e.g. from a previously malformed <- line)
-        c.execute(
-            "DELETE FROM edges WHERE dst=? AND src NOT IN (SELECT slug FROM notes)",
-            (note.slug,),
-        )
+
+        # Save old <- declarations before clearing — needed to prune orphaned edges below.
+        old_incoming = {
+            (row["source_slug"], row["rel"])
+            for row in c.execute(
+                "SELECT source_slug, rel FROM decl_incoming WHERE declaring_slug=?",
+                (note.slug,),
+            )
+        }
+
+        c.execute("DELETE FROM decl_outgoing WHERE declaring_slug=?", (note.slug,))
+        c.execute("DELETE FROM decl_incoming WHERE declaring_slug=?", (note.slug,))
 
         for tag in note.tags:
             c.execute("INSERT OR IGNORE INTO tags(slug,tag) VALUES(?,?)", (note.slug, tag))
 
         for rel_name, target in note.all_outgoing:
             c.execute(
+                "INSERT OR IGNORE INTO decl_outgoing(declaring_slug,rel,target_slug) VALUES(?,?,?)",
+                (note.slug, rel_name, target),
+            )
+            c.execute(
                 "INSERT OR IGNORE INTO edges(src,rel,dst) VALUES(?,?,?)",
                 (note.slug, rel_name, target),
             )
-        # <- edges in a file mean: target -> this note
+        # <- edges: store in decl_incoming AND insert into edges
         for rel_name, source in note.all_incoming:
+            c.execute(
+                "INSERT OR IGNORE INTO decl_incoming(declaring_slug,rel,source_slug) VALUES(?,?,?)",
+                (note.slug, rel_name, source),
+            )
             c.execute(
                 "INSERT OR IGNORE INTO edges(src,rel,dst) VALUES(?,?,?)",
                 (source, rel_name, note.slug),
+            )
+        # Re-apply any <- declarations from OTHER notes that point to this note as source.
+        # This ensures edges created by other notes' <- declarations survive this resync.
+        for row in c.execute(
+            "SELECT declaring_slug, rel, source_slug FROM decl_incoming WHERE source_slug=?",
+            (note.slug,),
+        ):
+            c.execute(
+                "INSERT OR IGNORE INTO edges(src,rel,dst) VALUES(?,?,?)",
+                (row["source_slug"], row["rel"], row["declaring_slug"]),
+            )
+
+        # Prune edges that were only kept alive by <- decls this note just dropped.
+        # Only removes an edge if the source note also doesn't independently declare it.
+        new_incoming = {(src, rel) for rel, src in note.all_incoming}
+        for source_slug, rel in old_incoming - new_incoming:
+            c.execute(
+                """
+                DELETE FROM edges WHERE src=? AND rel=? AND dst=? AND NOT EXISTS (
+                    SELECT 1 FROM decl_outgoing
+                    WHERE declaring_slug=? AND rel=? AND target_slug=?
+                )
+                """,
+                (source_slug, rel, note.slug, source_slug, rel, note.slug),
             )
 
     def delete_note(self, slug: str):
         self.conn.execute("DELETE FROM notes WHERE slug=?", (slug,))
         self.conn.execute("DELETE FROM tags  WHERE slug=?", (slug,))
         self.conn.execute("DELETE FROM edges WHERE src=? OR dst=?", (slug, slug))
+        self.conn.execute(
+            "DELETE FROM decl_outgoing WHERE declaring_slug=?", (slug,)
+        )
+        self.conn.execute(
+            "DELETE FROM decl_incoming WHERE declaring_slug=? OR source_slug=?",
+            (slug, slug),
+        )
 
     # ------------------------------------------------------------------ query
 

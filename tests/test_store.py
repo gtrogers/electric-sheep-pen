@@ -1049,3 +1049,114 @@ class TestDiagnose:
         assert result["bare_notes"] == []
         assert result["tagless_notes"] == []
         assert result["stub_notes"] == []
+
+
+# ──────────────────────────────────────────────────────── incoming decl persistence
+
+class TestIncomingDeclPersistence:
+    """Tests that <- declarations survive resync of the source note."""
+
+    def test_incoming_edge_survives_source_resync(self, store, memo_dir):
+        """B declares <- A; re-upserting A must not wipe the A→B edge."""
+        b = make_note(memo_dir, "b", desc="Note B.",
+                      rels={"related": Relationship("related", outgoing=[], incoming=["a"])})
+        a = make_note(memo_dir, "a", desc="Note A.", body="original")
+        store.upsert_note(b)
+        store.upsert_note(a)
+        store.conn.commit()
+
+        # Resync A with changed body — simulates a file edit
+        a2 = make_note(memo_dir, "a", desc="Note A.", body="updated body")
+        store.upsert_note(a2)
+        store.conn.commit()
+
+        edges = list(store.conn.execute("SELECT src, rel, dst FROM edges"))
+        pairs = {(e["src"], e["dst"]) for e in edges}
+        assert ("a", "b") in pairs, "A→B edge should survive A's resync"
+
+    def test_incoming_edge_removed_when_declarer_deleted(self, store, memo_dir):
+        """B declares <- A; deleting B must remove the A→B edge."""
+        b = make_note(memo_dir, "b", desc="Note B.",
+                      rels={"related": Relationship("related", outgoing=[], incoming=["a"])})
+        a = make_note(memo_dir, "a", desc="Note A.")
+        store.upsert_note(b)
+        store.upsert_note(a)
+        store.conn.commit()
+
+        store.delete_note("b")
+        store.conn.commit()
+
+        edges = list(store.conn.execute("SELECT src, dst FROM edges"))
+        pairs = {(e["src"], e["dst"]) for e in edges}
+        assert ("a", "b") not in pairs
+
+    def test_incoming_edge_removed_when_declarer_drops_it(self, store, memo_dir):
+        """B declares <- A, then is re-upserted without it; edge should disappear."""
+        b = make_note(memo_dir, "b", desc="Note B.",
+                      rels={"related": Relationship("related", outgoing=[], incoming=["a"])})
+        a = make_note(memo_dir, "a", desc="Note A.")
+        store.upsert_note(b)
+        store.upsert_note(a)
+        store.conn.commit()
+
+        # B stops declaring <- A
+        b2 = make_note(memo_dir, "b", desc="Note B.", rels={})
+        store.upsert_note(b2)
+        store.conn.commit()
+
+        edges = list(store.conn.execute("SELECT src, dst FROM edges"))
+        pairs = {(e["src"], e["dst"]) for e in edges}
+        assert ("a", "b") not in pairs
+
+    def test_dual_declaration_persists_until_both_drop(self, store, memo_dir):
+        """A declares ->B AND B declares <-A; dropping A's decl keeps edge via B's."""
+        a = make_note(memo_dir, "a", desc="Note A.",
+                      rels={"related": Relationship("related", outgoing=["b"], incoming=[])})
+        b = make_note(memo_dir, "b", desc="Note B.",
+                      rels={"related": Relationship("related", outgoing=[], incoming=["a"])})
+        store.upsert_note(a)
+        store.upsert_note(b)
+        store.conn.commit()
+
+        # A drops its -> B declaration
+        a2 = make_note(memo_dir, "a", desc="Note A.", rels={})
+        store.upsert_note(a2)
+        store.conn.commit()
+
+        edges = list(store.conn.execute("SELECT src, dst FROM edges"))
+        pairs = {(e["src"], e["dst"]) for e in edges}
+        assert ("a", "b") in pairs, "Edge should persist because B still declares <- A"
+
+        # Now B also drops it
+        b2 = make_note(memo_dir, "b", desc="Note B.", rels={})
+        store.upsert_note(b2)
+        store.conn.commit()
+
+        edges2 = list(store.conn.execute("SELECT src, dst FROM edges"))
+        pairs2 = {(e["src"], e["dst"]) for e in edges2}
+        assert ("a", "b") not in pairs2, "Edge should be gone now that both dropped it"
+
+    def test_sync_order_independent(self, store, memo_dir):
+        """The A→B edge should exist regardless of whether A or B is synced last."""
+        b = make_note(memo_dir, "b", desc="Note B.",
+                      rels={"related": Relationship("related", outgoing=[], incoming=["a"])})
+        a = make_note(memo_dir, "a", desc="Note A.")
+
+        # Order 1: B then A
+        store.upsert_note(b)
+        store.upsert_note(a)
+        store.conn.commit()
+        edges1 = {(e["src"], e["dst"]) for e in store.conn.execute("SELECT src,dst FROM edges")}
+        assert ("a", "b") in edges1, "B then A order should preserve A→B"
+
+        # Reset
+        store.delete_note("a")
+        store.delete_note("b")
+        store.conn.commit()
+
+        # Order 2: A then B
+        store.upsert_note(a)
+        store.upsert_note(b)
+        store.conn.commit()
+        edges2 = {(e["src"], e["dst"]) for e in store.conn.execute("SELECT src,dst FROM edges")}
+        assert ("a", "b") in edges2, "A then B order should also give A→B"

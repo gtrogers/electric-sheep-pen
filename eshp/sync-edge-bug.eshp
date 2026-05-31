@@ -1,0 +1,60 @@
+#bug #store #edges
+
+> BUG (FIXED): <- declarations were silently wiped when the source note was resynced.
+
+## The bug
+
+When note B declared `<- A` under a relationship block, the store created edge A→B.
+When A was later resynced (body edit, tag change, or sync() file order),
+`upsert_note(A)` ran `DELETE FROM edges WHERE src=A`, which wiped A→B —
+even though A never declared it. B's declaration was silently lost.
+
+This also affected sync() order: if A was processed after B, A's sweep immediately
+deleted what B just created.
+
+## Root cause
+
+The edges table had no concept of edge ownership.
+upsert_note assumed it "owned" all outgoing edges from its slug.
+
+## Fix: decl_outgoing + decl_incoming tables
+
+Two lookup tables now track all declarations so edges can be correctly maintained:
+
+```sql
+CREATE TABLE decl_outgoing (declaring_slug, rel, target_slug)  -- tracks -> edges
+CREATE TABLE decl_incoming (declaring_slug, rel, source_slug)  -- tracks <- edges
+```
+
+upsert_note(X):
+  1. Save X's old_incoming (for pruning later)
+  2. DELETE FROM edges WHERE src=X
+  3. DELETE FROM decl_outgoing / decl_incoming WHERE declaring_slug=X
+  4. Re-insert X's -> decls into decl_outgoing AND edges
+  5. Re-insert X's <- decls into decl_incoming AND edges
+  6. Re-apply decl_incoming WHERE source_slug=X -> edges (keeps A→X alive when X is resynced)
+  7. Prune: for each decl X dropped, delete the edge IF the source doesn't also
+     independently declare it via decl_outgoing
+
+delete_note(X):
+  + DELETE FROM decl_outgoing / decl_incoming WHERE declaring_slug=X OR source_slug/target_slug=X
+
+## Properties of the fix
+
+- A→B survives A's resync (via re-apply in step 6)
+- A→B is pruned when B drops the <- A declaration AND A doesn't have -> B (step 7)
+- Dual-declaration: if both A declares ->B AND B declares <-A, the edge
+  persists until BOTH drop it (step 7 checks decl_outgoing before pruning)
+- sync() order-independent: result is the same regardless of which note is processed last
+
+## Tests added (TestIncomingDeclPersistence)
+
+- test_incoming_edge_survives_source_resync
+- test_incoming_edge_removed_when_declarer_deleted
+- test_incoming_edge_removed_when_declarer_drops_it
+- test_dual_declaration_persists_until_both_drop
+- test_sync_order_independent
+
+.related
+-> store
+-> edge-direction
