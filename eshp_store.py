@@ -88,11 +88,11 @@ class EshpStore:
 
     def sync(self, verbose: bool = False):
         """Scan the memo folder and sync all .memo files into the DB."""
-        memo_files = list(self.root.glob("*.eshp"))
+        memo_files = list(self.root.rglob("*.eshp"))
         seen_slugs = set()
 
         for path in memo_files:
-            note = parse_eshp(path)
+            note = parse_eshp(path, root=self.root)
             self.upsert_note(note)
             seen_slugs.add(note.slug)
             if verbose:

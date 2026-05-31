@@ -28,7 +28,9 @@ Rules:
     ✓  <- other-slug
     ✗  <- related other-slug   ← this stores "related other-slug" as the src slug (ghost node!)
 - A blank line ends a relationship block; content after goes back to body
-- Slugs are kebab-case; the filename without .eshp is the slug
+- Slugs are root-relative POSIX paths without .eshp extension; top-level notes use plain stem
+  e.g. eshp/store.eshp → store   |   eshp/concepts/auth.eshp → concepts/auth
+- Relationship targets must use the full path-slug (e.g. -> concepts/auth, not -> auth)
 - Tags: # prefix only in file, stripped everywhere else (DB, EshpNote.tags)
 - Desc: > prefix only in file, stripped everywhere else (DB, EshpNote.desc)
 - Escape: \ at start of a (stripped) line removes its special meaning

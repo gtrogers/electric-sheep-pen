@@ -11,19 +11,12 @@ information about the current project.
 This skill is for doing deep maintenance on the graph, ensuring is it up
 to date and that the relationships are mapped correctly.
 
+Important: prefer `eshp recall <slug>` and `eshp scan <topic>` to reading
+memory files directly.
+
 ## Procedure
 
 Ensure the git state is clean so we can commit the updated memory files.
-
-Run diagnostics first — use the output as your work queue:
-
-```
-eshp diagnose
-```
-
-- Fix **dangling edges** immediately (broken connections are data corruption)
-- Resolve **orphaned nodes** — link them into the graph or delete if stale
-- Note **bloated notes**, **hub nodes**, and **stubs** — address if time allows; otherwise document in the commit message
 
 Understand the current memory graph
 

@@ -11,11 +11,14 @@ EshpHandler (watchdog FileSystemEventHandler)
   on_created / on_modified → upsert_note + commit
   on_deleted               → delete_note + commit
   Only processes .eshp suffix files.
+  Slug derived via path.relative_to(store.root).as_posix().removesuffix(".eshp").
+  Watchdog runs recursive=True — picks up files in any subdirectory.
 
 Commands:
   serve [--port 7842]   full sync + watchdog + local web server (cytoscape.js graph view)
   watch               full sync on startup, then watches for file changes
   new <slug>          creates skeleton note, opens $EDITOR, syncs on exit
+                      slug may be a path (e.g. concepts/auth) — parent dirs created automatically
   show <slug>         body + tags + outgoing/incoming edges
   search <query>      LIKE search, optional --tag filter
   scan <query>        broad search: FTS + tag names + 1-hop relation expansion (summaries)

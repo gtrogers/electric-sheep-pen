@@ -209,6 +209,44 @@ class TestAllEdges:
         note = parse_eshp(path)
         assert note.slug == "my-service"
 
+    def test_slug_uses_stem_when_no_root(self, tmp_path):
+        subdir = tmp_path / "concepts"
+        subdir.mkdir()
+        path = subdir / "auth-service.eshp"
+        path.write_text("#tag\n", encoding="utf-8")
+        note = parse_eshp(path)
+        assert note.slug == "auth-service"
+
+    def test_slug_uses_relative_path_with_root(self, tmp_path):
+        subdir = tmp_path / "concepts"
+        subdir.mkdir()
+        path = subdir / "auth-service.eshp"
+        path.write_text("#tag\n", encoding="utf-8")
+        note = parse_eshp(path, root=tmp_path)
+        assert note.slug == "concepts/auth-service"
+
+    def test_slug_top_level_with_root_unchanged(self, tmp_path):
+        path = write_memo(tmp_path, "my-service", "#tag\n")
+        note = parse_eshp(path, root=tmp_path)
+        assert note.slug == "my-service"
+
+    def test_slug_nested_two_levels_with_root(self, tmp_path):
+        subdir = tmp_path / "modules" / "auth"
+        subdir.mkdir(parents=True)
+        path = subdir / "tokens.eshp"
+        path.write_text("#tag\n", encoding="utf-8")
+        note = parse_eshp(path, root=tmp_path)
+        assert note.slug == "modules/auth/tokens"
+
+    def test_slug_uses_posix_separator_regardless_of_os(self, tmp_path):
+        subdir = tmp_path / "a" / "b"
+        subdir.mkdir(parents=True)
+        path = subdir / "note.eshp"
+        path.write_text("", encoding="utf-8")
+        note = parse_eshp(path, root=tmp_path)
+        assert "/" in note.slug
+        assert "\\" not in note.slug
+
 
 # ──────────────────────────────────────────────────────── render_eshp
 

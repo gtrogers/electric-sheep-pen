@@ -1160,3 +1160,122 @@ class TestIncomingDeclPersistence:
         store.conn.commit()
         edges2 = {(e["src"], e["dst"]) for e in store.conn.execute("SELECT src,dst FROM edges")}
         assert ("a", "b") in edges2, "A then B order should also give A→B"
+
+
+# ──────────────────────────────────────────────────────── subdirectory support
+
+class TestSubdirectorySupport:
+    """Notes in subdirectories of the eshp root use path-based slugs."""
+
+    def test_sync_finds_note_in_subdirectory(self, store, memo_dir):
+        subdir = memo_dir / "concepts"
+        subdir.mkdir()
+        (subdir / "auth.eshp").write_text("#tag\n\n> Auth note.\n", encoding="utf-8")
+        store.sync()
+        store.conn.commit()
+        result = store.get_note("concepts/auth")
+        assert result is not None
+        assert result["desc"] == "Auth note."
+
+    def test_sync_assigns_path_slug(self, store, memo_dir):
+        subdir = memo_dir / "modules"
+        subdir.mkdir()
+        (subdir / "api-service.eshp").write_text("#svc\n", encoding="utf-8")
+        store.sync()
+        store.conn.commit()
+        slugs = store.list_by_tag("svc")
+        assert "modules/api-service" in slugs
+
+    def test_sync_top_level_slug_unchanged(self, store, memo_dir):
+        make_note(memo_dir, "store", tags=["module"])
+        store.sync()
+        store.conn.commit()
+        result = store.get_note("store")
+        assert result is not None
+
+    def test_sync_finds_deeply_nested_note(self, store, memo_dir):
+        deep = memo_dir / "a" / "b"
+        deep.mkdir(parents=True)
+        (deep / "deep-note.eshp").write_text("> Deep.\n", encoding="utf-8")
+        store.sync()
+        store.conn.commit()
+        result = store.get_note("a/b/deep-note")
+        assert result is not None
+        assert result["desc"] == "Deep."
+
+    def test_upsert_path_slug_note(self, store, memo_dir):
+        subdir = memo_dir / "decisions"
+        subdir.mkdir()
+        path = subdir / "use-postgres.eshp"
+        note = EshpNote(
+            path=path,
+            slug="decisions/use-postgres",
+            tags=["decision"],
+            desc="Use PostgreSQL.",
+            body="Chose Postgres for its reliability.",
+            relationships={},
+        )
+        from eshp_parser import render_eshp
+        path.write_text(render_eshp(note), encoding="utf-8")
+        store.upsert_note(note)
+        store.conn.commit()
+        result = store.get_note("decisions/use-postgres")
+        assert result is not None
+        assert result["desc"] == "Use PostgreSQL."
+        assert "decisions/use-postgres" in store.list_by_tag("decision")
+
+    def test_delete_path_slug_note(self, store, memo_dir):
+        subdir = memo_dir / "concepts"
+        subdir.mkdir()
+        path = subdir / "auth.eshp"
+        note = EshpNote(
+            path=path, slug="concepts/auth", tags=[], desc="", body="", relationships={}
+        )
+        from eshp_parser import render_eshp
+        path.write_text(render_eshp(note), encoding="utf-8")
+        store.upsert_note(note)
+        store.conn.commit()
+        store.delete_note("concepts/auth")
+        store.conn.commit()
+        assert store.get_note("concepts/auth") is None
+
+    def test_edges_reference_path_slug(self, store, memo_dir):
+        """A note in a subdirectory can declare edges to another path-slug note."""
+        subdir = memo_dir / "concepts"
+        subdir.mkdir()
+        rel = Relationship(name="related", outgoing=["concepts/tokens"])
+        note = EshpNote(
+            path=subdir / "auth.eshp",
+            slug="concepts/auth",
+            tags=[],
+            desc="",
+            body="",
+            relationships={"related": rel},
+        )
+        from eshp_parser import render_eshp
+        note.path.write_text(render_eshp(note), encoding="utf-8")
+        store.upsert_note(note)
+        store.conn.commit()
+        result = store.get_note("concepts/auth")
+        out_dsts = [e["dst"] for e in result["edges_out"]]
+        assert "concepts/tokens" in out_dsts
+
+    def test_search_matches_path_slug(self, store, memo_dir):
+        subdir = memo_dir / "modules"
+        subdir.mkdir()
+        (subdir / "api-service.eshp").write_text("#svc\n\nHandles API requests.\n", encoding="utf-8")
+        store.sync()
+        store.conn.commit()
+        results = store.search("api-service")
+        slugs = [r["slug"] for r in results]
+        assert "modules/api-service" in slugs
+
+    def test_sync_mixes_flat_and_subdir_notes(self, store, memo_dir):
+        make_note(memo_dir, "flat-note", tags=["flat"])
+        subdir = memo_dir / "sub"
+        subdir.mkdir()
+        (subdir / "nested-note.eshp").write_text("#nested\n", encoding="utf-8")
+        store.sync()
+        store.conn.commit()
+        assert store.get_note("flat-note") is not None
+        assert store.get_note("sub/nested-note") is not None

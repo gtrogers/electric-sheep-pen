@@ -1,0 +1,56 @@
+#spec design feature
+
+> Support for organising notes into subdirectories within eshp/.
+
+## Problem
+
+All notes currently live flat in eshp/. Slugs are derived from `path.stem` (filename only).
+Three hard constraints make this flat-only:
+  1. `sync()` uses `glob("*.eshp")` — not recursive
+  2. `parse_eshp()` uses `path.stem` — no directory context
+  3. Watchdog uses `recursive=False`
+
+## Design: path-based slugs
+
+Slugs become root-relative POSIX paths (no .eshp extension).
+
+  eshp/store.eshp           → slug: store           (unchanged)
+  eshp/concepts/auth.eshp   → slug: concepts/auth   (new)
+  eshp/modules/api.eshp     → slug: modules/api     (new)
+
+Always `/` separator (POSIX), even on Windows. DB stores them as plain TEXT — no schema change.
+Top-level notes are fully backward compatible. Relationship refs must use full path-slug.
+
+## Changes required
+
+### eshp_parser.py
+Add optional `root: Path = None` param to `parse_eshp()`.
+When root is provided: slug = path.relative_to(root).as_posix().removesuffix(".eshp")
+When root is None (default): slug = path.stem  ← backward compat for tests and `eshp new`
+
+### eshp_store.py
+sync(): change glob("*.eshp") → rglob("*.eshp")
+sync(): pass root=self.root to parse_eshp()
+
+### eshp_cli.py
+EshpHandler._sync_file / _delete_file: path.stem → path.relative_to(store.root).as_posix().removesuffix(".eshp")
+EshpHandler._sync_file: pass root=store.root to parse_eshp()
+observer.schedule(): recursive=False → recursive=True  (both watch and serve)
+eshp new: store.root / f"{slug}.eshp" → (store.root / slug).with_suffix(".eshp"); mkdir parents
+
+## Out of scope
+- Relative refs within files (e.g. -> ./sibling) — all refs are absolute from root
+- Ambiguous short-slug resolution
+- .eshpignore
+- Rename/move tooling
+
+## Test plan (TDD order)
+1. test_parser.py: root param (no root→stem, with root→path-slug, top-level stays same)
+2. test_store.py: sync finds subdir notes, path-slug upsert/get/delete, edges across dirs, search
+3. CLI: EshpHandler + eshp new (subdirectory creation)
+
+.related
+-> file-format
+-> parser
+-> store
+-> cli

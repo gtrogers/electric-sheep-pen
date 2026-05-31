@@ -56,7 +56,7 @@ class EshpNote:
         return edges
 
 
-def parse_eshp(path: Path) -> EshpNote:
+def parse_eshp(path: Path, root: Optional[Path] = None) -> EshpNote:
     text = path.read_text(encoding="utf-8")
     lines = text.splitlines()
 
@@ -128,7 +128,10 @@ def parse_eshp(path: Path) -> EshpNote:
         body_lines.append(line)
 
     body = "\n".join(body_lines).strip()
-    slug = path.stem
+    if root is not None:
+        slug = path.relative_to(root).as_posix().removesuffix(".eshp")
+    else:
+        slug = path.stem
 
     return EshpNote(
         path=path,

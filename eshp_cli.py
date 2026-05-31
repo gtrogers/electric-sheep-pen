@@ -89,9 +89,9 @@ class EshpHandler(FileSystemEventHandler):
         path = Path(path_str)
         if path.suffix != ".eshp":
             return
-        slug = path.stem
+        slug = path.relative_to(self.store.root).as_posix().removesuffix(".eshp")
         try:
-            note = parse_eshp(path)
+            note = parse_eshp(path, root=self.store.root)
             self.store.upsert_note(note)
             self.store.conn.commit()
             ts = time.strftime("%H:%M:%S")
@@ -103,7 +103,7 @@ class EshpHandler(FileSystemEventHandler):
         path = Path(path_str)
         if path.suffix != ".eshp":
             return
-        slug = path.stem
+        slug = path.relative_to(self.store.root).as_posix().removesuffix(".eshp")
         self.store.delete_note(slug)
         self.store.conn.commit()
         ts = time.strftime("%H:%M:%S")
@@ -151,7 +151,7 @@ def watch(root):
 
     handler = EshpHandler(store)
     observer = Observer()
-    observer.schedule(handler, str(store.root), recursive=False)
+    observer.schedule(handler, str(store.root), recursive=True)
     observer.start()
 
     try:
@@ -202,7 +202,7 @@ def serve(port, host, root, no_browser):
 
     handler = EshpHandler(store)
     observer = Observer()
-    observer.schedule(handler, str(store.root), recursive=False)
+    observer.schedule(handler, str(store.root), recursive=True)
     observer.start()
 
     try:
@@ -224,19 +224,20 @@ def serve(port, host, root, no_browser):
 def new(slug, tags, root):
     """Create a new .memo note and open it in $EDITOR."""
     store = get_store(Path(root) if root else None)
-    path = store.root / f"{slug}.eshp"
+    note_path = (store.root / slug).with_suffix(".eshp")
 
-    if path.exists():
+    if note_path.exists():
         click.echo(click.style(f"Note '{slug}' already exists.", fg="yellow"))
         store.close()
         return
 
+    note_path.parent.mkdir(parents=True, exist_ok=True)
     tag_list = [t.strip() for t in tags.split(",") if t.strip()]
-    note = EshpNote(path=path, slug=slug, tags=tag_list, desc="", body="", relationships={})
-    path.write_text(render_eshp(note), encoding="utf-8")
+    note = EshpNote(path=note_path, slug=slug, tags=tag_list, desc="", body="", relationships={})
+    note_path.write_text(render_eshp(note), encoding="utf-8")
 
-    click.echo(click.style(f"→ {path}", dim=True))
-    _open_in_editor(path)
+    click.echo(click.style(f"→ {note_path}", dim=True))
+    _open_in_editor(note_path)
     if not (store.root / ".eshp.db").exists() or store.get_note(slug) is None:
         store.sync()
     store.close()

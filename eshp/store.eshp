@@ -14,7 +14,7 @@ The decl_* tables enable correct edge ownership: upsert_note(X) re-applies
 other notes' decl_incoming WHERE source_slug=X so <- edges survive X's resync.
 
 Key methods:
-  sync(verbose)        — full scan of eshp/ dir, upserts all notes, removes stale
+  sync(verbose)        — recursive scan of eshp/ dir (rglob), upserts all notes, removes stale
   upsert_note(note)    — replaces tags+edges for a slug, then re-inserts
   delete_note(slug)    — removes from all three tables
   search(query, tags)  — LIKE scan on body+slug, optional tag filter

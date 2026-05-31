@@ -9,6 +9,9 @@ ESHP (electric sheep pen) is a codebase level memory graph designed
 to be stored in git. Use it to maintain knowledge about the current
 project.
 
+Important: prefer `eshp recall <slug>` and `eshp scan <topic>` to
+reading memory files directly.
+
 ## Commit
 
 - Check everything works: run all tests, ensure git is in a clean state

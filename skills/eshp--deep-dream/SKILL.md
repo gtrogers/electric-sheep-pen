@@ -11,6 +11,9 @@ information about the current project.
 This skill is for doing deep maintenance on the graph, ensuring is it up
 to date and that the relationships are mapped correctly.
 
+Important: prefer `eshp recall <slug>` and `eshp scan <topic>` to reading
+memory files directly.
+
 ## Procedure
 
 Ensure the git state is clean so we can commit the updated memory files.

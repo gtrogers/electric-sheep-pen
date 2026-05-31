@@ -12,6 +12,9 @@ When given a spec file or a prompt describing a feature or change
 to the codebase use eshp to understand the current codebase and
 dev flow, plan out changes and keep track of progress.
 
+Important: prefer `eshp scan <topic>` and `eshp recall <slug>` to
+reading memory files directly.
+
 ## Inputs
 
 A spec file or prompt from the user describing a feature or change

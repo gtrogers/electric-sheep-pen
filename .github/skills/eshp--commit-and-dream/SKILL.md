@@ -9,6 +9,9 @@ ESHP (electric sheep pen) is a codebase level memory graph designed
 to be stored in git. Use it to maintain knowledge about the current
 project.
 
+Important: prefer `eshp recall <slug>` and `eshp scan <topic>` to
+reading memory files directly.
+
 ## Commit
 
 - Check everything works: run all tests, ensure git is in a clean state
@@ -18,10 +21,6 @@ project.
 
 After committing...
 
-- Run `eshp diagnose` and review the output:
-  - **Critical**: fix dangling edges (broken connections) immediately if found
-  - **Worth addressing now**: orphaned nodes (no connections) — link or delete
-  - **Note for context**: flag bloated notes, hub nodes, stubs — mention in the dream commit but don't block on them
 - Reflect on the coding session and ensure the eshp memory graph is
   up to date.
 - Do not try to maintain the entire graph, focus on updating, adding
