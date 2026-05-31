@@ -144,7 +144,7 @@ class TestSummariseCommand:
         assert result.exit_code == 0
 
 
-class TestSubgraphCommand:
+class TestGraphCommand:
     def _make_store(self, tmp_path):
         from eshp_parser import EshpNote, Relationship, render_eshp
         from eshp_store import EshpStore
@@ -175,18 +175,34 @@ class TestSubgraphCommand:
         store.close()
         return d
 
-    def test_basic_output_contains_root_and_children(self, runner, tmp_path):
+    def test_forward_shows_children(self, runner, tmp_path):
         d = self._make_store(tmp_path)
-        result = runner.invoke(cli, ["subgraph", "root", "--root", str(d)])
+        result = runner.invoke(cli, ["graph", "root", "--direction", "forward", "--depth", "3", "--root", str(d)])
         assert result.exit_code == 0
-        assert "root" in result.output
         assert "child-a" in result.output
         assert "child-b" in result.output
-
-    def test_output_contains_grandchild(self, runner, tmp_path):
-        d = self._make_store(tmp_path)
-        result = runner.invoke(cli, ["subgraph", "root", "--root", str(d)])
         assert "grandchild" in result.output
+
+    def test_forward_depth_limits(self, runner, tmp_path):
+        d = self._make_store(tmp_path)
+        result = runner.invoke(cli, ["graph", "root", "--direction", "forward", "--depth", "1", "--root", str(d)])
+        assert result.exit_code == 0
+        assert "child-a" in result.output
+        assert "grandchild" not in result.output
+
+    def test_backward_shows_parents(self, runner, tmp_path):
+        d = self._make_store(tmp_path)
+        result = runner.invoke(cli, ["graph", "grandchild", "--direction", "backward", "--depth", "2", "--root", str(d)])
+        assert result.exit_code == 0
+        assert "child-a" in result.output
+        assert "root" in result.output
+
+    def test_both_shows_forward_and_backward(self, runner, tmp_path):
+        d = self._make_store(tmp_path)
+        result = runner.invoke(cli, ["graph", "child-a", "--direction", "both", "--depth", "1", "--root", str(d)])
+        assert result.exit_code == 0
+        assert "root" in result.output       # backward edge
+        assert "grandchild" in result.output  # forward edge
 
     def test_rel_filter_limits_output(self, runner, tmp_path):
         from eshp_parser import EshpNote, Relationship, render_eshp
@@ -210,30 +226,28 @@ class TestSubgraphCommand:
         store.conn.commit()
         store.close()
 
-        result = runner.invoke(cli, ["subgraph", "root", "--rel", "depends-on", "--root", str(d)])
+        result = runner.invoke(cli, ["graph", "root", "--direction", "forward", "--rel", "depends-on", "--root", str(d)])
         assert "dep-child" in result.output
         assert "rel-child" not in result.output
 
     def test_multiple_rels_option(self, runner, tmp_path):
         d = self._make_store(tmp_path)
-        result = runner.invoke(cli, ["subgraph", "root", "--rel", "depends-on", "--rel", "related", "--root", str(d)])
+        result = runner.invoke(cli, ["graph", "root", "--direction", "forward", "--rel", "depends-on", "--rel", "related", "--root", str(d)])
         assert result.exit_code == 0
         assert "child-a" in result.output
 
     def test_missing_slug_exits_nonzero(self, runner, tmp_path):
         d = self._make_store(tmp_path)
-        result = runner.invoke(cli, ["subgraph", "no-such-slug", "--root", str(d)])
+        result = runner.invoke(cli, ["graph", "no-such-slug", "--root", str(d)])
         assert result.exit_code != 0
 
     def test_isolated_node_shows_no_edges(self, runner, tmp_path):
         d = self._make_store(tmp_path)
-        result = runner.invoke(cli, ["subgraph", "child-b", "--root", str(d)])
+        result = runner.invoke(cli, ["graph", "child-b", "--direction", "forward", "--root", str(d)])
         assert result.exit_code == 0
         assert "no edges found" in result.output
 
-    def test_depth_option_limits_traversal(self, runner, tmp_path):
+    def test_backward_arrow_in_output(self, runner, tmp_path):
         d = self._make_store(tmp_path)
-        result = runner.invoke(cli, ["subgraph", "root", "--depth", "1", "--root", str(d)])
-        assert result.exit_code == 0
-        assert "child-a" in result.output
-        assert "grandchild" not in result.output
+        result = runner.invoke(cli, ["graph", "grandchild", "--direction", "backward", "--depth", "1", "--root", str(d)])
+        assert "◀" in result.output

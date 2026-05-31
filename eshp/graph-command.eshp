@@ -1,0 +1,42 @@
+#cli #spec #design
+
+> graph command — BFS tree with --direction (forward/backward/both), multi-rel filter.
+
+Replaces the old flat-edge-list graph and the short-lived subgraph command.
+All three traversal modes use the same tree output and the same store.subgraph() method.
+
+graph <slug> [--direction forward|backward|both] [--rel REL]... [--depth N]  (default direction=both, depth=1)
+
+  forward   — follow outgoing edges (src → dst)
+              e.g. "what does feature-x depend on, transitively?"
+              eshp graph feature-x --direction forward --rel depends-on --depth 3
+
+  backward  — follow incoming edges (treat dst IN frontier as entry point)
+              e.g. "what depends on library-y?"
+              eshp graph library-y --direction backward --rel depends-on --depth 3
+
+  both      — follow edges in either direction (neighbourhood view, default)
+              eshp graph some-note --depth 2
+
+Output format (indented tree):
+  root-slug  (depth=2, direction=forward)
+    ──[depends-on]──▶  child-a  (child-a description)
+        ──[depends-on]──▶  grandchild
+    ──[depends-on]──▶  child-b  [↑ already shown]
+
+  For backward edges the arrow is reversed:
+    ◀──[depends-on]──  parent-node  (parent description)
+
+Diamond shapes (node reachable via two paths) show [↑ already shown] on the second occurrence.
+
+Store method:
+  store.subgraph(slug, rels=None, depth=3, direction='both')
+    Returns [{src, rel, dst, hop, traversal_dir}]
+    traversal_dir: 'forward' | 'backward'
+    forward  → SQL WHERE src IN (frontier)
+    backward → SQL WHERE dst IN (frontier)
+    both     → SQL WHERE src IN (frontier) OR dst IN (frontier)
+
+.related
+-> cli
+-> store

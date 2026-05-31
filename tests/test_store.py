@@ -800,66 +800,73 @@ class TestSubgraph:
         make_note(memo_dir, "f")
         store.sync()
 
-    def test_forward_only(self, store, memo_dir):
-        """Only edges where src is in frontier are followed; incoming edges are ignored."""
+    # ── forward direction ──────────────────────────────────────────────
+
+    def test_forward_excludes_incoming(self, store, memo_dir):
+        """direction=forward only follows src-in-frontier edges."""
         from eshp_parser import Relationship
         make_note(memo_dir, "root", rels={"depends-on": Relationship("depends-on", outgoing=["child"], incoming=[])})
         make_note(memo_dir, "child")
         make_note(memo_dir, "unrelated", rels={"depends-on": Relationship("depends-on", outgoing=["root"], incoming=[])})
         store.sync()
 
-        result = store.subgraph("root", depth=2)
+        result = store.subgraph("root", depth=2, direction="forward")
         srcs = {e["src"] for e in result}
-        assert "unrelated" not in srcs  # unrelated → root is backward, must not appear
+        assert "unrelated" not in srcs
 
-    def test_returns_direct_neighbours(self, store, memo_dir):
+    def test_forward_returns_direct_neighbours(self, store, memo_dir):
         self._setup_chain(store, memo_dir)
-        result = store.subgraph("a", depth=1)
+        result = store.subgraph("a", depth=1, direction="forward")
         edges = {(e["src"], e["dst"]) for e in result}
         assert ("a", "b") in edges
         assert ("a", "e") in edges
         assert all(e["hop"] == 1 for e in result)
 
-    def test_depth_limits_traversal(self, store, memo_dir):
+    def test_forward_depth_limits_traversal(self, store, memo_dir):
         self._setup_chain(store, memo_dir)
-        result = store.subgraph("a", depth=1)
+        result = store.subgraph("a", depth=1, direction="forward")
         dsts = {e["dst"] for e in result}
         assert "c" not in dsts  # c is 2 hops away
 
-    def test_hop_field_tracks_depth(self, store, memo_dir):
+    def test_forward_hop_field_tracks_depth(self, store, memo_dir):
         self._setup_chain(store, memo_dir)
-        result = store.subgraph("a", depth=3)
+        result = store.subgraph("a", depth=3, direction="forward")
         by_dst = {e["dst"]: e["hop"] for e in result}
         assert by_dst["b"] == 1
         assert by_dst["c"] == 2
         assert by_dst["d"] == 3
 
+    def test_forward_traversal_dir_field(self, store, memo_dir):
+        self._setup_chain(store, memo_dir)
+        result = store.subgraph("a", depth=2, direction="forward")
+        assert all(e["traversal_dir"] == "forward" for e in result)
+
     def test_rel_filter_single(self, store, memo_dir):
         self._setup_chain(store, memo_dir)
-        result = store.subgraph("a", rels=["depends-on"], depth=2)
+        result = store.subgraph("a", rels=["depends-on"], depth=2, direction="forward")
         rels_seen = {e["rel"] for e in result}
         assert rels_seen == {"depends-on"}
         dsts = {e["dst"] for e in result}
-        assert "e" in dsts  # a→e is depends-on
+        assert "e" in dsts
         assert "f" not in dsts  # e→f is part-of, filtered out
 
     def test_rel_filter_multiple(self, store, memo_dir):
         self._setup_chain(store, memo_dir)
-        result = store.subgraph("a", rels=["depends-on", "part-of"], depth=2)
+        result = store.subgraph("a", rels=["depends-on", "part-of"], depth=2, direction="forward")
         rels_seen = {e["rel"] for e in result}
         assert "depends-on" in rels_seen
         assert "part-of" in rels_seen
         dsts = {e["dst"] for e in result}
-        assert "f" in dsts  # e→f via part-of
+        assert "f" in dsts
 
     def test_no_rel_filter_follows_all(self, store, memo_dir):
         self._setup_chain(store, memo_dir)
-        result = store.subgraph("a", rels=None, depth=2)
+        result = store.subgraph("a", rels=None, depth=2, direction="forward")
         dsts = {e["dst"] for e in result}
-        assert "f" in dsts  # follows part-of too
+        assert "f" in dsts
 
     def test_diamond_included_once_in_frontier(self, store, memo_dir):
-        """Both B→D and C→D are returned, but D only appears once as an expansion node."""
+        """Both B→D and C→D are returned, but D only expands once."""
         from eshp_parser import Relationship
         def dep(targets):
             return {"depends-on": Relationship("depends-on", outgoing=targets, incoming=[])}
@@ -869,16 +876,63 @@ class TestSubgraph:
         make_note(memo_dir, "d")
         store.sync()
 
-        result = store.subgraph("a", depth=3)
-        # D is reachable twice (via B and C) — both edges appear in result
+        result = store.subgraph("a", depth=3, direction="forward")
         d_edges = [e for e in result if e["dst"] == "d"]
         assert len(d_edges) == 2
-        # But no edges should have D as src (it was only added to frontier once)
         d_src_edges = [e for e in result if e["src"] == "d"]
         assert d_src_edges == []
 
     def test_empty_graph_returns_no_edges(self, store, memo_dir):
         make_note(memo_dir, "isolated")
         store.sync()
-        result = store.subgraph("isolated", depth=3)
+        result = store.subgraph("isolated", depth=3, direction="forward")
         assert result == []
+
+    # ── backward direction ─────────────────────────────────────────────
+
+    def test_backward_finds_incoming(self, store, memo_dir):
+        """direction=backward follows edges where dst is in frontier."""
+        self._setup_chain(store, memo_dir)
+        # Starting from "d" going backward should find c (c→d exists)
+        result = store.subgraph("d", depth=1, direction="backward")
+        srcs = {e["src"] for e in result}
+        assert "c" in srcs
+
+    def test_backward_traversal_dir_field(self, store, memo_dir):
+        self._setup_chain(store, memo_dir)
+        result = store.subgraph("d", depth=1, direction="backward")
+        assert all(e["traversal_dir"] == "backward" for e in result)
+
+    def test_backward_multi_hop(self, store, memo_dir):
+        """Backward traversal can climb the full chain."""
+        self._setup_chain(store, memo_dir)
+        result = store.subgraph("d", depth=3, direction="backward")
+        srcs = {e["src"] for e in result}
+        assert "c" in srcs  # c → d
+        assert "b" in srcs  # b → c → d
+        assert "a" in srcs  # a → b → c → d
+
+    def test_backward_excludes_outgoing(self, store, memo_dir):
+        """direction=backward does not follow forward edges from root."""
+        self._setup_chain(store, memo_dir)
+        result = store.subgraph("a", depth=1, direction="backward")
+        dsts = {e["dst"] for e in result}
+        # a has forward edges to b and e — backward from a should NOT find them
+        assert "b" not in dsts
+        assert "e" not in dsts
+
+    # ── both direction ─────────────────────────────────────────────────
+
+    def test_both_finds_forward_and_backward(self, store, memo_dir):
+        self._setup_chain(store, memo_dir)
+        result = store.subgraph("b", depth=1, direction="both")
+        edge_pairs = {(e["src"], e["dst"]) for e in result}
+        assert ("b", "c") in edge_pairs   # forward: b→c
+        assert ("a", "b") in edge_pairs   # backward: a→b
+
+    def test_both_traversal_dir_mixed(self, store, memo_dir):
+        self._setup_chain(store, memo_dir)
+        result = store.subgraph("b", depth=1, direction="both")
+        dirs = {e["traversal_dir"] for e in result}
+        assert "forward" in dirs
+        assert "backward" in dirs

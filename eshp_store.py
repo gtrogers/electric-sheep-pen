@@ -242,12 +242,26 @@ class EshpStore:
             )
         return [dict(r) for r in rows]
 
-    def subgraph(self, slug: str, rels: Optional[list] = None, depth: int = 3) -> list[dict]:
-        """Forward-only BFS from slug, optionally filtered to specific relationship types.
+    def subgraph(
+        self,
+        slug: str,
+        rels: Optional[list] = None,
+        depth: int = 3,
+        direction: str = "both",
+    ) -> list[dict]:
+        """BFS from slug, optionally filtered to specific relationship types.
 
-        Returns list of {src, rel, dst, hop} where hop is the 1-based traversal depth.
-        Only follows edges where src is in the current frontier (forward direction).
-        Edges to already-visited nodes are included but those nodes are not expanded.
+        direction:
+          'forward'  — follow edges where src is in frontier (src → dst)
+          'backward' — follow edges where dst is in frontier (traversed in reverse)
+          'both'     — follow edges in either direction (default)
+
+        Returns list of {src, rel, dst, hop, traversal_dir} where:
+          hop           — 1-based traversal depth
+          traversal_dir — 'forward' or 'backward' (how the edge was traversed)
+
+        Edges to already-visited nodes are included in the result but those
+        nodes are not added to the next frontier.
         """
         visited = {slug}
         frontier = {slug}
@@ -257,19 +271,37 @@ class EshpStore:
             if not frontier:
                 break
             placeholders = ",".join("?" * len(frontier))
-            rows = self.conn.execute(
-                f"SELECT src, rel, dst FROM edges WHERE src IN ({placeholders})",
-                list(frontier),
-            )
+            if direction == "forward":
+                sql = f"SELECT src, rel, dst FROM edges WHERE src IN ({placeholders})"
+                params = list(frontier)
+            elif direction == "backward":
+                sql = f"SELECT src, rel, dst FROM edges WHERE dst IN ({placeholders})"
+                params = list(frontier)
+            else:  # both
+                sql = (
+                    f"SELECT src, rel, dst FROM edges "
+                    f"WHERE src IN ({placeholders}) OR dst IN ({placeholders})"
+                )
+                params = list(frontier) * 2
+
             next_frontier = set()
-            for row in rows:
+            for row in self.conn.execute(sql, params):
                 r = dict(row)
                 if rels and r["rel"] not in rels:
                     continue
-                result.append({**r, "hop": hop})
-                if r["dst"] not in visited:
-                    visited.add(r["dst"])
-                    next_frontier.add(r["dst"])
+                if direction == "forward":
+                    tdir, new_node = "forward", r["dst"]
+                elif direction == "backward":
+                    tdir, new_node = "backward", r["src"]
+                else:
+                    if r["src"] in frontier:
+                        tdir, new_node = "forward", r["dst"]
+                    else:
+                        tdir, new_node = "backward", r["src"]
+                result.append({**r, "hop": hop, "traversal_dir": tdir})
+                if new_node not in visited:
+                    visited.add(new_node)
+                    next_frontier.add(new_node)
             frontier = next_frontier
 
         return result

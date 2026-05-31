@@ -351,66 +351,27 @@ def edges(rel, root):
 
 @cli.command()
 @click.argument("slug")
-@click.option("--depth", "-d", default=1, show_default=True)
-@click.option("--rel", default=None, help="Filter by relationship name")
-@click.option("--root", default=None, type=click.Path())
-def graph(slug, depth, rel, root):
-    """Show neighbourhood graph around a note."""
-    store = get_store(Path(root) if root else None)
-    note = store.get_note(slug)
-
-    if not note:
-        click.echo(click.style(f"Note '{slug}' not found.", fg="red"))
-        store.close()
-        sys.exit(1)
-
-    edges = store.neighbours(slug, rel=rel, depth=depth)
-
-    if not edges:
-        store.close()
-        click.echo(f"No edges found for '{slug}'.")
-        return
-
-    nodes = set()
-    for e in edges:
-        nodes.add(e["src"])
-        nodes.add(e["dst"])
-
-    descs = store.get_descs(list(nodes))
-    store.close()
-
-    click.echo()
-    click.echo(click.style(f"Graph around: {slug}", bold=True) + f"  (depth={depth})")
-    click.echo()
-
-    for e in edges:
-        src_desc = descs.get(e["src"], "")
-        dst_desc = descs.get(e["dst"], "")
-        src_label = e["src"] + (f" ({src_desc})" if src_desc and e["src"] != slug else "")
-        dst_label = e["dst"] + (f" ({dst_desc})" if dst_desc and e["dst"] != slug else "")
-        src = click.style(src_label, fg="cyan", bold=(e["src"] == slug))
-        rel_label = click.style(e["rel"], fg="blue")
-        dst = click.style(dst_label, fg="cyan", bold=(e["dst"] == slug))
-        click.echo(f"  {src}  --[{rel_label}]-->  {dst}")
-
-    click.echo()
-    click.echo(click.style(f"{len(nodes)} node(s), {len(edges)} edge(s)", fg="white", dim=True))
-    click.echo()
-
-
-@cli.command()
-@click.argument("slug")
+@click.option("--depth", "-d", default=1, show_default=True, help="Maximum traversal depth.")
 @click.option("--rel", "rels", multiple=True, help="Relationship type(s) to traverse (repeat for multiple). Default: all.")
-@click.option("--depth", "-d", default=3, show_default=True, help="Maximum traversal depth.")
+@click.option(
+    "--direction",
+    type=click.Choice(["forward", "backward", "both"]),
+    default="both",
+    show_default=True,
+    help="Edge traversal direction. forward=src→dst only, backward=dst→src only, both=either.",
+)
 @click.option("--root", default=None, type=click.Path())
-def subgraph(slug, rels, depth, root):
-    """Show a directed subgraph rooted at SLUG as an indented tree.
+def graph(slug, depth, rels, direction, root):
+    """Show a graph rooted at SLUG as an indented tree.
 
-    Traverses forward edges only (src → dst). Use --rel to restrict which
-    relationship types are followed; omit --rel to follow all types.
-    Repeat --rel to traverse multiple relationship types:
+    Traversal direction controls which edges are followed:
+      forward   — follow outgoing edges (src → dst); e.g. what does SLUG depend on?
+      backward  — follow incoming edges (dst → src); e.g. what depends on SLUG?
+      both      — follow edges in either direction (default neighbourhood view)
 
-        eshp subgraph feature-x --rel depends-on --rel blocks
+    Use --rel to restrict traversal to specific relationship types (repeatable):
+
+        eshp graph feature-x --direction forward --rel depends-on --depth 3
     """
     store = get_store(Path(root) if root else None)
     note = store.get_note(slug)
@@ -421,9 +382,8 @@ def subgraph(slug, rels, depth, root):
         sys.exit(1)
 
     rels_filter = list(rels) if rels else None
-    edges = store.subgraph(slug, rels=rels_filter, depth=depth)
+    edges = store.subgraph(slug, rels=rels_filter, depth=depth, direction=direction)
 
-    # Collect all nodes for desc lookup
     nodes = {slug}
     for e in edges:
         nodes.add(e["src"])
@@ -432,26 +392,35 @@ def subgraph(slug, rels, depth, root):
     descs = store.get_descs(list(nodes))
     store.close()
 
-    # Build src → [(rel, dst)] map for tree rendering
+    # Build tree: map each "parent" node to its discovered children.
+    # For forward edges (A→B): A is parent, B is child — arrow points right.
+    # For backward edges (C→A): A is parent, C is child — arrow points left.
     from collections import defaultdict
     children = defaultdict(list)
     for e in edges:
-        children[e["src"]].append((e["rel"], e["dst"]))
+        if e["traversal_dir"] == "forward":
+            children[e["src"]].append(("→", e["rel"], e["dst"]))
+        else:
+            children[e["dst"]].append(("←", e["rel"], e["src"]))
 
-    rel_header = f"  rel: {', '.join(rels_filter)}" if rels_filter else ""
+    dir_hint = f"  direction={direction}"
+    rel_hint = f"  rel: {', '.join(rels_filter)}" if rels_filter else ""
     click.echo()
     click.echo(
         click.style(slug, fg="cyan", bold=True)
-        + click.style(f"  (depth={depth}){rel_header}", fg="white", dim=True)
+        + click.style(f"  (depth={depth}{dir_hint}{rel_hint})", fg="white", dim=True)
     )
 
     seen = {slug}
 
     def print_children(node: str, indent: int) -> None:
         pad = "  " * indent
-        for rel_name, child in children[node]:
+        for arrow_dir, rel_name, child in children[node]:
             rel_label = click.style(rel_name, fg="blue")
-            arrow = f"{pad}  ──[{rel_label}]──▶  "
+            if arrow_dir == "→":
+                arrow = f"{pad}  ──[{rel_label}]──▶  "
+            else:
+                arrow = f"{pad}  ◀──[{rel_label}]──  "
             if child in seen:
                 child_label = click.style(child, fg="cyan") + click.style("  [↑ already shown]", fg="white", dim=True)
                 click.echo(arrow + child_label)
