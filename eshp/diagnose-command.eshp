@@ -57,3 +57,6 @@ deep-dream: run diagnose first, treat output as the work queue.
 -> store
 -> summarise-command
 
+.part-of
+-> architecture
+

@@ -26,6 +26,7 @@ Commands:
   edges [--rel REL]   all src --[rel]--> dst triples, optional rel filter
   graph <slug>        BFS tree, --direction forward|backward|both, --rel (repeatable), --depth
   stats               note/tag/edge counts
+  diagnose            graph health checks: orphans, bloat, hubs, dangling edges, bare/tagless/stub notes
   init-skills <path>  copy bundled agent skill templates into path/
   summarise           compact graph summary for agent context injection
 

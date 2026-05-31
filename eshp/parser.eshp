@@ -24,5 +24,10 @@ Desc is the > line in the file (stripped of the > prefix and whitespace).
 Escape: a line starting with \ strips the \ and treats the rest as literal body text.
 render_eshp() uses _escape_body() to automatically escape body lines starting with \, ., or >.
 
+TRAP: body lines starting with . are parsed as relationship block headers.
+  If you manually write a .eshp file with a line like ".github/skills/" in the body,
+  the parser will treat it as the start of a ".github/skills/..." relationship block.
+  Fix: rephrase to avoid a leading dot, or use render_eshp() which auto-escapes these lines.
+
 .part-of
 -> architecture
