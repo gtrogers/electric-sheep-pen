@@ -150,3 +150,4 @@ The SSE loop opens one connection per client and closes it on disconnect.
 -> cli
 -> store
 -> graph-command
+-> server

@@ -14,6 +14,11 @@ Run tests:
 Run the watcher (keep DB live while editing notes):
   eshp watch
 
+Run the web view (watcher + local cytoscape.js graph in browser):
+  eshp serve                   # opens http://127.0.0.1:7842 automatically
+  eshp serve --port 8000       # custom port
+  eshp serve --no-browser      # headless / CI
+
 Query the memory graph:
   eshp scan <query>        broad discovery (FTS + tags + 1-hop expansion)
   eshp recall <slug>       focused context load (full note + N related)
@@ -34,6 +39,7 @@ Key test files:
   tests/test_parser.py  — parser + render tests
   tests/test_store.py   — store upsert/delete/query/summarise tests
   tests/test_cli.py     — CLI command tests (init-skills, summarise)
+  tests/test_server.py  — HTTP server route tests (starts real server on random port)
 
 .related
 -> conventions

@@ -1,18 +1,20 @@
 #architecture #overview
 
-> Three-module layered design: parser → store → CLI, one-way data flow.
+> Four-module layered design: parser → store → CLI/server, one-way data flow.
 
-Three-module layered design. Each layer has a single responsibility and no
-upward dependencies.
+Four-module design. Each module has a single responsibility and no upward dependencies.
 
   eshp_parser.py  — pure parse/render, no I/O side effects
-  eshp_store.py   — SQLite graph store, no CLI concerns
+  eshp_store.py   — SQLite graph store, no CLI or server concerns
   eshp_cli.py     — Click commands, watchdog watcher, user output
+  eshp_server.py  — stdlib HTTP server for the web view (zero extra deps)
 
 Data flows one way: .eshp file → parse_eshp() → EshpNote → store.upsert_note() → SQLite.
 The CLI is the only layer allowed to call both parser and store together.
+The server reads from SQLite directly (never through EshpStore) — own connection per request.
 
 .contains
 -> parser
 -> store
 -> cli
+-> server
