@@ -61,6 +61,7 @@ class EshpRequestHandler(BaseHTTPRequestHandler):
                 {"data": {"id": r["slug"], "label": r["slug"], "desc": r["desc"] or ""}}
                 for r in conn.execute("SELECT slug, desc FROM notes ORDER BY slug")
             ]
+            slugs = {n["data"]["id"] for n in nodes}
             edges = [
                 {
                     "data": {
@@ -71,6 +72,7 @@ class EshpRequestHandler(BaseHTTPRequestHandler):
                     }
                 }
                 for r in conn.execute("SELECT src, rel, dst FROM edges")
+                if r["src"] in slugs and r["dst"] in slugs
             ]
         finally:
             conn.close()

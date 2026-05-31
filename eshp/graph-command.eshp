@@ -41,4 +41,4 @@ Store method:
 .related
 -> cli
 -> store
-<- related rels-edges-commands
+<- rels-edges-commands

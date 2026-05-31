@@ -103,6 +103,11 @@ class EshpStore:
         )
         c.execute("DELETE FROM tags  WHERE slug=?", (note.slug,))
         c.execute("DELETE FROM edges WHERE src=?",  (note.slug,))
+        # Clean orphan incoming edges (e.g. from a previously malformed <- line)
+        c.execute(
+            "DELETE FROM edges WHERE dst=? AND src NOT IN (SELECT slug FROM notes)",
+            (note.slug,),
+        )
 
         for tag in note.tags:
             c.execute("INSERT OR IGNORE INTO tags(slug,tag) VALUES(?,?)", (note.slug, tag))
