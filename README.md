@@ -1,20 +1,118 @@
-# eshp
+# electric sheep pen
 
-A codebase-local agentic memory graph. Plain text `.eshp` files in a `eshp/`
-folder, backed by a SQLite graph store for fast querying.
+> **Alpha** — rough edges expected. Feedback welcome.
+
+A codebase-local memory graph for AI coding agents. Plain-text `.eshp` files
+live in an `eshp/` folder alongside your code. A SQLite graph store backs them
+for fast querying. Everything commits to git.
+
+---
+
+## Why does this exist?
+
+AI coding agents are fast but amnesiac. Every session starts cold — no memory
+of past decisions, architecture rationale, or project conventions.
+
+Electric sheep pen gives agents a persistent, structured, project-specific
+memory that survives session boundaries. Notes capture not just *what* the
+code does but *why* — the decisions, traps, and context that matter most.
 
 Inspired by the [A-MEM paper](https://arxiv.org/abs/2502.12110) — memories as
 interconnected notes with tags, free text, and typed relationships.
 
 ---
 
-## File format
+## Install
+
+Requires Python 3.11+.
+
+```bash
+pipx install git+https://github.com/gtrogers/electric-sheep-pen.git
+```
+
+Verify:
+
+```bash
+eshp --help
+```
+
+---
+
+## Bootstrap an existing codebase
+
+**1. Install the agent skills** into whichever AI tool you use:
+
+```bash
+cd myproject
+
+eshp init-skills .github/skills    # GitHub Copilot
+eshp init-skills .cursor/skills    # Cursor
+eshp init-skills .rules/skills     # custom agents
+```
+
+This copies four skill templates into your agent's skills directory. Commit
+them — they tell your agent how to use eshp.
+
+**2. Start the watcher** to keep the graph DB live as you edit notes:
+
+```bash
+eshp watch
+```
+
+Or launch the visual web view (opens a graph in your browser):
+
+```bash
+eshp serve
+```
+
+**3. Add your first notes.** A good starting point for any codebase:
+
+```bash
+eshp new architecture       # high-level module layout
+eshp new dev/conventions    # how to build, test, and commit
+eshp new dev/workflow       # day-to-day dev commands
+```
+
+`eshp new` opens `$EDITOR`. Write what you'd want a new teammate — or your
+future agent — to know. Add `#tags`, a `> description`, and `.relationships`
+to other notes.
+
+**4. Ask your agent a question.** With the `eshp--explain` skill installed,
+your agent will query eshp before answering:
+
+```
+"Explain how the auth module works"
+"Why does the edge direction work this way?"
+"How do I add a new command?"
+```
+
+---
+
+## The agent workflow
+
+Four skills ship with eshp. They create a **read → act → write** loop:
+
+| Skill | When to use |
+|---|---|
+| `eshp--explain` | Ask questions about the codebase |
+| `eshp--plan` | Plan a feature — query eshp for context before implementing |
+| `eshp--commit-and-dream` | After coding — commit, then update the memory graph |
+| `eshp--deep-dream` | Periodic maintenance — resync graph accuracy with the codebase |
+
+Each session the agent consults memory before starting, then enriches it after
+finishing. The graph compounds: each session leaves it more useful than before.
+
+---
+
+## The `.eshp` file format
 
 ```
 #tag1 #tag2
 
-Free text body. Write anything here — context, observations,
-warnings, decisions. This is the memory content.
+> One-line description shown when this note is referenced.
+
+Free text body — prose, decisions, context, warnings.
+Write what you'd want to know next time.
 
 .relationship-name
 -> target-slug
@@ -26,128 +124,93 @@ warnings, decisions. This is the memory content.
 ```
 
 - **Tags** — `#word` tokens on the first line(s)
+- **Description** — `>` prefix, one line, shown in search results
 - **Body** — free prose, separated from tags by a blank line
 - **Relationships** — named sections starting with `.`
-  - `->` outgoing edge: *this note* points to *target*
-  - `<-` incoming edge: *target* points to *this note* (reverse declaration)
+  - `->` outgoing edge: *this note* → *target*
+  - `<-` incoming edge: *source* → *this note* (declared from this side)
 
-Files live in `eshp/<slug>.eshp`. The slug is the filename without extension.
+Files live at `eshp/<slug>.eshp`. Slugs are root-relative paths without the
+extension — `eshp/modules/auth.eshp` has slug `modules/auth`.
 
----
+### Example
 
-## Setup
-
-```bash
-pipx install .        # install as a standalone CLI tool
 ```
+#service #backend #auth
 
-Or for development:
+> Handles user authentication and session management.
 
-```bash
-pip install -e ".[dev]"
-pytest
+Uses JWT tokens with a 24h expiry. Token cache grows unbounded
+under sustained load — caused two OOM incidents in production.
+
+.depends-on
+-> modules/postgres
+-> modules/redis
+
+.called-by
+<- modules/api-gateway
 ```
 
 ---
 
 ## Commands
 
-### `eshp new <slug>`
-Create a new note and open it in `$EDITOR`. Auto-syncs on save.
+### Querying
 
-```bash
-eshp new auth-service --tags service,backend
-```
+| Command | Description |
+|---|---|
+| `eshp summarise` | Compact graph overview — total size, top tags, top rels, recent notes. Pipe into agent context at session start. |
+| `eshp scan <query>` | Broad discovery — FTS + tag/rel name matching + 1-hop expansion, scored. Best starting point for agents. |
+| `eshp recall <slug> [-n N]` | Full note + N direct neighbours with complete body. Default N=1. |
+| `eshp show <slug>` | Single note body, tags, and edges. |
+| `eshp search <query>` | Simple LIKE search across body and slug. |
+| `eshp graph <slug>` | BFS tree. Use `--direction forward\|backward\|both`, `--rel`, `--depth`. |
+| `eshp tag <tagname>` | All notes with a tag. |
+| `eshp tags` | All tags with counts. |
+| `eshp rels` | All relationship types with edge counts. |
+| `eshp edges [--rel REL]` | All `src --[rel]--> dst` triples. |
 
-### `eshp show <slug>`
-Display a note's body, tags, and all graph edges (in and out).
+### Editing
 
-```bash
-eshp show auth-service
-```
+| Command | Description |
+|---|---|
+| `eshp new <slug>` | Create a skeleton note and open in `$EDITOR`. Syncs on exit. |
+| `eshp watch` | Full sync on startup, then watches for file changes. |
+| `eshp serve [--port 7842]` | Watcher + local Cytoscape.js graph view in browser. |
 
-### `eshp search <query>`
-Full-text search across all note bodies and slugs.
+### Maintenance
 
-```bash
-eshp search "memory pressure"
-eshp search crash --tag backend
-```
-
-### `eshp tags`
-List all tags with note counts.
-
-```bash
-eshp tags
-```
-
-### `eshp tag <tagname>`
-List all notes carrying a tag.
-
-```bash
-eshp tag infra
-eshp tag "#backend"   # # prefix optional
-```
-
-### `eshp graph <slug>`
-Show the neighbourhood graph around a note.
-
-```bash
-eshp graph auth-service
-eshp graph auth-service --depth 2
-eshp graph auth-service --rel depends-on
-```
-
-### `eshp stats`
-Show note, tag, and edge counts.
-
-```bash
-eshp stats
-```
-
----
-
-## Example `.eshp` file
-
-```
-#service #backend #auth
-
-Handles user authentication and session management.
-Uses JWT tokens with a 24h expiry. Has crashed twice
-due to memory pressure when token cache grows unbounded.
-
-.depends-on
--> postgres
--> redis
-
-.related
--> api-gateway
-```
+| Command | Description |
+|---|---|
+| `eshp diagnose` | Graph health checks: orphans, dangling edges, stub notes, hubs. |
+| `eshp stats` | Note, tag, and edge counts. |
+| `eshp init-skills <path>` | Copy bundled agent skill templates to `<path>/`. |
 
 ---
 
 ## How it works
 
-1. **Parse** — each `.eshp` file is parsed into tags, body text, and typed edges
-2. **Store** — edges and tags are written to three SQLite tables: `notes`, `tags`, `edges`
-3. **Query** — `search` does a `LIKE` scan; `graph` does BFS over the edge table
-4. `<-` edges in a file are stored as forward edges in the DB (the other note
-   pointing *to* this one), so relationships can be declared from either side
+```
+.eshp file  →  parse_eshp()  →  EshpNote  →  store.upsert_note()  →  SQLite
+```
+
+Four modules, each with one responsibility:
+
+- `eshp_parser.py` — pure parse/render, no I/O side effects
+- `eshp_store.py` — SQLite graph store (`notes`, `tags`, `edges` tables)
+- `eshp_cli.py` — Click CLI + watchdog file watcher
+- `eshp_server.py` — stdlib HTTP server for the web view (zero extra runtime deps)
+
+The DB (`.eshp.db`) lives inside `eshp/` and is gitignored — regenerated from
+the `.eshp` files by `eshp watch` or any sync call.
 
 ---
 
-## Agent integration
+## Development
 
-The CLI is designed to be called from an LLM agent tool loop:
-
+```bash
+git clone https://github.com/gtrogers/electric-sheep-pen.git
+cd electric-sheep-pen
+pip install -e ".[dev]"
+pytest
 ```
-eshp watch                         # run in background to keep DB live
-eshp search <query>                # retrieve relevant context
-eshp show <slug>                   # expand a specific note
-eshp graph <slug> --depth 2       # explore neighbourhood
-eshp new <slug> --tags ...        # create new memory notes
-```
-
-All output is plain text, suitable for piping into an LLM context window.
-
-See [`eshp-skill.md`](./eshp-skill.md) for a ready-to-use agent skill definition.
