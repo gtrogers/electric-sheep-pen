@@ -447,7 +447,7 @@ def scan(query, limit, root):
 
 @cli.command()
 @click.argument("slug")
-@click.option("--n", "-n", default=5, show_default=True, help="Number of related notes to include")
+@click.option("--n", "-n", default=1, show_default=True, help="Number of related notes to include")
 @click.option("--root", default=None, type=click.Path())
 def recall(slug, n, root):
     """Return a note and its N closest related notes with full content.
