@@ -18,7 +18,7 @@ Commands:
   show <slug>         body + tags + outgoing/incoming edges
   search <query>      LIKE search, optional --tag filter
   scan <query>        broad search: FTS + tag names + 1-hop relation expansion (summaries)
-  recall <slug>       full note + N closest related notes with body content
+  recall <slug> [-n N]  full note + N closest related notes (default N=1)
   tags                all tags with counts (bar chart)
   tag <tagname>       notes carrying a tag
   rels                all relationship types with edge counts (bar chart)

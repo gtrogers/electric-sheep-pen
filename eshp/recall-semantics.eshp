@@ -19,12 +19,13 @@ scan <query> [--limit N]
   body_preview is still in the store result dict but NOT shown in CLI output —
   kept for programmatic use / future tooling.
 
-recall <slug> [--n N]
+recall <slug> [--n N]  (default N=1)
   Focused retrieval. Given a slug:
     1. Returns the full note (body, desc, tags, all edges)
     2. Returns up to N direct neighbours with full body content
   Both outgoing and incoming neighbours are included.
   Use this to load a specific topic and its immediate context into an LLM.
+  Default N=1 keeps output tight; pass --n 3 or higher for broader context.
 
 Store methods:
   store.scan(query, limit=20)  → list[{slug, desc, tags, body_preview, edge_count, score}]
