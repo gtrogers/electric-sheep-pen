@@ -18,7 +18,7 @@
       font-size: 13px;
     }
 
-    #cy { flex: 1; }
+    #cy { flex: 1; overflow: hidden; }
 
     #panel {
       width: 340px;
@@ -218,8 +218,14 @@
         }
       });
 
-      cy.on('tap', 'node', e => showPanel(e.target.id()));
+      cy.on('tap', 'node', e => {
+        const slug = e.target.id();
+        setStatus(`loading: ${slug}…`);
+        showPanel(slug).catch(err => setStatus(`error: ${err.message}`));
+      });
       cy.on('tap', e => { if (e.target === cy) closePanel(); });
+
+      new ResizeObserver(() => cy.resize()).observe(document.getElementById('cy'));
 
       const count = data.elements.filter(e => !e.data.source).length;
       setStatus(`${count} notes · ${data.elements.length - count} edges`);
@@ -229,7 +235,10 @@
 
     async function showPanel(slug) {
       const res = await fetch('/api/note/' + encodeURIComponent(slug));
-      if (!res.ok) return;
+      if (!res.ok) {
+        setStatus(`fetch error ${res.status} for: ${slug}`);
+        return;
+      }
       const note = await res.json();
 
       document.getElementById('panel-title').textContent = note.slug;
@@ -274,6 +283,7 @@
 
       cy.getElementById(slug).select();
       document.getElementById('panel').classList.add('open');
+      setStatus(`${slug} — press ✕ to close`);
     }
 
     function navigateTo(slug) {
