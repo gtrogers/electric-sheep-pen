@@ -1,25 +1,28 @@
-#bug #server #spec
+#bug #server #fixed
 
-> BUG: /api/note/<slug> returns 404 for path-slugs because the server doesn't URL-decode the slug.
+> FIXED: /api/note/<slug> returned 404 for path-slugs because the server didn't URL-decode the slug.
 
 Introduced when directory support added path-based slugs (e.g. modules/cli).
 
 Root cause:
   Frontend fetches: /api/note/ + encodeURIComponent(slug)
   encodeURIComponent('modules/cli') → 'modules%2Fcli'
-  Server extracts slug as 'modules%2Fcli' — no URL-decode step.
+  Server extracted slug as 'modules%2Fcli' — no URL-decode step.
   DB query: WHERE n.slug='modules%2Fcli' → no match → 404.
 
-Fix:
-  In eshp_server.py do_GET, after extracting slug from self.path:
-    from urllib.parse import unquote
-    slug = unquote(self.path[len("/api/note/"):])
-  This converts %2F → / before the DB lookup.
-  Also handles literal-slash form (/api/note/modules/cli) correctly — unquote is a no-op.
+Fix applied (eshp_server.py):
+  Added: from urllib.parse import unquote
+  Changed: slug = self.path[len("/api/note/"):]
+       to: slug = unquote(self.path[len("/api/note/"):])
+  One stdlib line — no new dependencies.
+  Also handles literal-slash form (/api/note/modules/cli) correctly — unquote is a no-op there.
 
-Tests to add (TestApiNote):
-  test_path_slug_percent_encoded  — GET /api/note/modules%2Fparser → 200
-  test_path_slug_literal_slash    — GET /api/note/modules/parser  → 200
+Tests (TestApiNote in tests/test_server.py):
+  test_path_slug_percent_encoded  — GET /api/note/modules%2Fparser → 200 ✓
+  test_path_slug_literal_slash    — GET /api/note/modules/parser  → 200 ✓
+
+PITFALL: any route that echoes a URL path segment into a DB query needs unquote().
+  Literal-slash URLs work by accident (startswith match still fires); only %2F form breaks.
 
 .related
 -> modules/server

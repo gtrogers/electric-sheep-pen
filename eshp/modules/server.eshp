@@ -26,7 +26,12 @@ make_server(eshp_root: Path, host, port) → ThreadingHTTPServer
   Sets server.db_path = eshp_root / ".eshp.db" on the server instance.
   Does not start serving — call serve_forever() in a daemon thread.
 
-TRAP — MUST use ThreadingHTTPServer (not HTTPServer):
+TRAP — slug in /api/note/<slug> must be URL-decoded:
+  Frontend calls encodeURIComponent(slug) → path-slugs like 'modules/cli' arrive
+  as 'modules%2Fcli'. The handler uses urllib.parse.unquote() to decode before
+  the DB lookup. Without this, path-slugs always 404 (was a real regression).
+
+
   The SSE /events handler runs an infinite poll loop for the duration of the
   browser session. HTTPServer is single-threaded: once /events is accepted, the
   entire server is blocked — no further requests (including /api/note/<slug>)
