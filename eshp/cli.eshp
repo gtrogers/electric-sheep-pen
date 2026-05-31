@@ -13,6 +13,7 @@ EshpHandler (watchdog FileSystemEventHandler)
   Only processes .eshp suffix files.
 
 Commands:
+  serve [--port 7842]   full sync + watchdog + local web server (cytoscape.js graph view)
   watch               full sync on startup, then watches for file changes
   new <slug>          creates skeleton note, opens $EDITOR, syncs on exit
   show <slug>         body + tags + outgoing/incoming edges
@@ -34,3 +35,4 @@ Commands:
 .depends-on
 -> store
 -> parser
+-> server

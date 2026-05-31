@@ -1,6 +1,6 @@
-#feature #planned #feasibility
+#feature #built #spec
 
-> Feasibility plan for a web-based graph visualisation of the eshp memory graph.
+> Web view feature for the eshp memory graph — BUILT. Run with `eshp serve`.
 
 ## Summary
 
@@ -101,13 +101,37 @@ include = ["eshp_cli.py", "eshp_parser.py", "eshp_store.py", "eshp_server.py", "
 - **Large graphs**: cytoscape.js handles ~1000 nodes fine with a force-directed layout
   (cose or cola). Above that, consider filtered views (tag filter, depth limit).
 
+## Cytoscape version
+
+Bundled cytoscape.js v3.33.4. Re-download manually if upgrading.
+File: `eshp/static/cytoscape.min.js`
+
+## serve command (eshp_cli.py)
+
+  eshp serve [--port 7842] [--host 127.0.0.1] [--root PATH] [--no-browser]
+
+On startup:
+  1. Full sync (same as watch)
+  2. Start HTTP server (make_server from eshp_server) in a daemon thread
+  3. Open browser at http://host:port (unless --no-browser)
+  4. Run EshpHandler + watchdog Observer in main thread loop
+
+Ctrl-C: stop observer, shutdown HTTPServer, close store.
+
+## Thread safety detail
+
+Each request handler opens its own short-lived sqlite3.connect(check_same_thread=False).
+Do NOT share the write-side EshpStore instance with request handlers.
+The SSE loop opens one connection per client and closes it on disconnect.
+
 ## Estimated scope
 
 - `eshp_server.py`: ~200 lines
 - `eshp/static/index.html`: ~150 lines (HTML + inline JS/CSS)
+- `eshp/static/cytoscape.min.js`: bundled (no edits needed)
 - CLI changes (`eshp_cli.py`): ~20 lines (serve command)
 - `pyproject.toml`: 1-line change
-- Tests: ~10-15 (server routes + SSE event format)
+- Tests (`tests/test_server.py`): ~8 tests (routes + 404 + SSE format)
 - Total: small-to-medium feature, one focused session
 
 ## Open questions

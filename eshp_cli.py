@@ -3,6 +3,7 @@
 eshp — agent-friendly CLI for a local Zettelkasten-style memory graph.
 
 Usage:
+  eshp serve [--port 7842] [--host 127.0.0.1]    Live web view (cytoscape.js)
   eshp watch                         Watch eshp/ and keep the DB live
   eshp new <slug> [--tags t1,t2]     Create a new note (opens $EDITOR)
   eshp show <slug>                   Show a note + its graph edges
@@ -23,7 +24,9 @@ import os
 import shutil
 import subprocess
 import sys
+import threading
 import time
+import webbrowser
 from pathlib import Path
 from typing import Optional
 
@@ -164,6 +167,57 @@ def watch(root):
 
 
 @cli.command()
+@click.option("--port", default=7842, show_default=True, help="Port to listen on")
+@click.option("--host", default="127.0.0.1", show_default=True, help="Host to bind to")
+@click.option("--root", default=None, type=click.Path(), help="Path to memo folder")
+@click.option("--no-browser", is_flag=True, help="Don't open browser automatically")
+def serve(port, host, root, no_browser):
+    """Start local web server with a live cytoscape.js graph view.
+
+    Also watches the memo folder for file changes (same as `watch`), so the
+    graph in the browser stays live as notes are edited.
+    """
+    from eshp_server import make_server
+
+    store = get_store(Path(root) if root else None)
+
+    click.echo(click.style("eshp serve", bold=True) + f"  {store.root}")
+    click.echo()
+    n = store.sync(verbose=False)
+    click.echo(click.style(f"✓ Bootstrapped {n} note(s)", fg="green"))
+
+    http_server = make_server(store.root, host=host, port=port)
+    t = threading.Thread(target=http_server.serve_forever, daemon=True)
+    t.start()
+
+    url = f"http://{host}:{port}"
+    click.echo(click.style(f"✓ Serving at {url}", fg="green"))
+    click.echo()
+
+    if not no_browser:
+        webbrowser.open(url)
+
+    click.echo(click.style("Watching for changes… (Ctrl-C to stop)", dim=True))
+    click.echo()
+
+    handler = EshpHandler(store)
+    observer = Observer()
+    observer.schedule(handler, str(store.root), recursive=False)
+    observer.start()
+
+    try:
+        while True:
+            time.sleep(0.5)
+    except KeyboardInterrupt:
+        observer.stop()
+        http_server.shutdown()
+        click.echo()
+        click.echo(click.style("Stopped.", dim=True))
+    finally:
+        observer.join()
+        store.close()
+
+
 @click.argument("slug")
 @click.option("--tags", default="", help="Comma-separated tags")
 @click.option("--root", default=None, type=click.Path())

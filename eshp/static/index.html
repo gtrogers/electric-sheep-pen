@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>eshp — memory graph</title>
+  <script src="/cytoscape.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      display: flex;
+      height: 100vh;
+      overflow: hidden;
+      background: #0d1117;
+      color: #c9d1d9;
+      font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+      font-size: 13px;
+    }
+
+    #cy { flex: 1; }
+
+    #panel {
+      width: 340px;
+      min-width: 340px;
+      display: none;
+      flex-direction: column;
+      background: #161b22;
+      border-left: 1px solid #30363d;
+      overflow: hidden;
+    }
+
+    #panel.open { display: flex; }
+
+    #panel-header {
+      padding: 14px 16px 10px;
+      border-bottom: 1px solid #30363d;
+      display: flex;
+      align-items: baseline;
+      gap: 10px;
+    }
+
+    #panel-title {
+      font-size: 15px;
+      font-weight: 600;
+      color: #58a6ff;
+      flex: 1;
+      word-break: break-all;
+    }
+
+    #panel-close {
+      cursor: pointer;
+      color: #484f58;
+      font-size: 18px;
+      line-height: 1;
+      user-select: none;
+    }
+    #panel-close:hover { color: #c9d1d9; }
+
+    #panel-tags {
+      padding: 8px 16px 0;
+      color: #7ee787;
+      font-size: 11px;
+      line-height: 1.8;
+    }
+
+    #panel-desc {
+      padding: 4px 16px 8px;
+      color: #8b949e;
+      font-size: 11px;
+      font-style: italic;
+    }
+
+    #panel-body {
+      padding: 10px 16px;
+      font-size: 12px;
+      line-height: 1.7;
+      white-space: pre-wrap;
+      overflow-y: auto;
+      flex: 1;
+      border-top: 1px solid #30363d;
+      color: #c9d1d9;
+    }
+
+    #panel-edges {
+      padding: 10px 16px 16px;
+      border-top: 1px solid #30363d;
+      font-size: 12px;
+      max-height: 200px;
+      overflow-y: auto;
+    }
+
+    .edge-section-title {
+      font-size: 10px;
+      color: #484f58;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin: 8px 0 4px;
+    }
+
+    .edge-item {
+      color: #6e7681;
+      cursor: pointer;
+      padding: 2px 0;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .edge-item:hover { color: #58a6ff; }
+
+    #status-bar {
+      position: fixed;
+      bottom: 10px;
+      left: 10px;
+      font-size: 10px;
+      color: #484f58;
+      pointer-events: none;
+    }
+
+    @keyframes pulse-glow {
+      0%   { background-color: #f4d03f; border-color: #f39c12; }
+      50%  { background-color: #ff8c00; border-color: #ff6600; }
+      100% { background-color: #f4d03f; border-color: #f39c12; }
+    }
+  </style>
+</head>
+<body>
+  <div id="cy"></div>
+
+  <div id="panel">
+    <div id="panel-header">
+      <div id="panel-title"></div>
+      <div id="panel-close" title="Close">✕</div>
+    </div>
+    <div id="panel-tags"></div>
+    <div id="panel-desc"></div>
+    <div id="panel-body"></div>
+    <div id="panel-edges"></div>
+  </div>
+
+  <div id="status-bar">eshp</div>
+
+  <script>
+    let cy = null;
+
+    // ── Graph load ───────────────────────────────────────────────────────────
+
+    async function loadGraph() {
+      setStatus('loading graph…');
+      const res = await fetch('/api/graph');
+      const data = await res.json();
+
+      cy = cytoscape({
+        container: document.getElementById('cy'),
+        elements: data.elements,
+        style: [
+          {
+            selector: 'node',
+            style: {
+              'background-color': '#1f6feb',
+              'label': 'data(label)',
+              'color': '#c9d1d9',
+              'font-size': '10px',
+              'font-family': 'SFMono-Regular, Consolas, monospace',
+              'text-valign': 'bottom',
+              'text-margin-y': '5px',
+              'width': 24,
+              'height': 24,
+              'border-width': 2,
+              'border-color': '#388bfd',
+            }
+          },
+          {
+            selector: 'edge',
+            style: {
+              'width': 1,
+              'line-color': '#30363d',
+              'target-arrow-color': '#30363d',
+              'target-arrow-shape': 'triangle',
+              'curve-style': 'bezier',
+              'label': 'data(rel)',
+              'font-size': '8px',
+              'color': '#484f58',
+              'font-family': 'SFMono-Regular, Consolas, monospace',
+              'text-rotation': 'autorotate',
+              'text-background-color': '#0d1117',
+              'text-background-opacity': 0.8,
+              'text-background-padding': '2px',
+            }
+          },
+          {
+            selector: ':selected',
+            style: {
+              'background-color': '#58a6ff',
+              'border-color': '#1f6feb',
+              'border-width': 3,
+            }
+          },
+          {
+            selector: '.recalled',
+            style: {
+              'background-color': '#f4d03f',
+              'border-color': '#f39c12',
+              'border-width': 4,
+              'transition-property': 'background-color, border-color, border-width',
+              'transition-duration': '0.2s',
+            }
+          }
+        ],
+        layout: {
+          name: 'cose',
+          animate: false,
+          randomize: true,
+          nodeRepulsion: 12000,
+          idealEdgeLength: 80,
+          edgeElasticity: 100,
+          gravity: 1,
+        }
+      });
+
+      cy.on('tap', 'node', e => showPanel(e.target.id()));
+      cy.on('tap', e => { if (e.target === cy) closePanel(); });
+
+      const count = data.elements.filter(e => !e.data.source).length;
+      setStatus(`${count} notes · ${data.elements.length - count} edges`);
+    }
+
+    // ── Note panel ───────────────────────────────────────────────────────────
+
+    async function showPanel(slug) {
+      const res = await fetch('/api/note/' + encodeURIComponent(slug));
+      if (!res.ok) return;
+      const note = await res.json();
+
+      document.getElementById('panel-title').textContent = note.slug;
+
+      const tags = note.tags ? note.tags.split(' ').map(t => '#' + t).join('  ') : '';
+      document.getElementById('panel-tags').textContent = tags;
+      document.getElementById('panel-desc').textContent = note.desc || '';
+      document.getElementById('panel-body').textContent = note.body || '';
+
+      const edgesEl = document.getElementById('panel-edges');
+      edgesEl.innerHTML = '';
+
+      if (note.edges_out && note.edges_out.length) {
+        const h = document.createElement('div');
+        h.className = 'edge-section-title';
+        h.textContent = 'outgoing';
+        edgesEl.appendChild(h);
+        note.edges_out.forEach(e => {
+          const d = document.createElement('div');
+          d.className = 'edge-item';
+          d.textContent = `──[${e.rel}]──▶  ${e.dst}`;
+          d.title = e.dst;
+          d.onclick = () => navigateTo(e.dst);
+          edgesEl.appendChild(d);
+        });
+      }
+
+      if (note.edges_in && note.edges_in.length) {
+        const h = document.createElement('div');
+        h.className = 'edge-section-title';
+        h.textContent = 'incoming';
+        edgesEl.appendChild(h);
+        note.edges_in.forEach(e => {
+          const d = document.createElement('div');
+          d.className = 'edge-item';
+          d.textContent = `◀──[${e.rel}]──  ${e.src}`;
+          d.title = e.src;
+          d.onclick = () => navigateTo(e.src);
+          edgesEl.appendChild(d);
+        });
+      }
+
+      cy.getElementById(slug).select();
+      document.getElementById('panel').classList.add('open');
+    }
+
+    function navigateTo(slug) {
+      cy.getElementById(slug).select();
+      cy.animate({ center: { eles: cy.getElementById(slug) } }, { duration: 300 });
+      showPanel(slug);
+    }
+
+    function closePanel() {
+      document.getElementById('panel').classList.remove('open');
+      cy && cy.elements().unselect();
+    }
+
+    document.getElementById('panel-close').onclick = closePanel;
+
+    // ── SSE recall events ────────────────────────────────────────────────────
+
+    function connectSSE() {
+      const source = new EventSource('/events');
+
+      source.onmessage = e => {
+        const data = JSON.parse(e.data);
+        if (data.type === 'recall' && cy) {
+          const node = cy.getElementById(data.slug);
+          if (node && node.length) {
+            node.addClass('recalled');
+            setTimeout(() => node.removeClass('recalled'), 2000);
+          }
+        }
+      };
+
+      source.onerror = () => {
+        source.close();
+        setTimeout(connectSSE, 3000);
+      };
+    }
+
+    // ── Status bar ───────────────────────────────────────────────────────────
+
+    function setStatus(msg) {
+      document.getElementById('status-bar').textContent = msg;
+    }
+
+    // ── Boot ─────────────────────────────────────────────────────────────────
+
+    loadGraph().then(connectSSE);
+  </script>
+</body>
+</html>

@@ -1,0 +1,39 @@
+#module #server #web
+
+> HTTP server for the eshp web view. Serves cytoscape.js graph UI and SSE recall events.
+
+eshp_server.py — stdlib http.server-based HTTP server (zero extra dependencies).
+
+Routes:
+  GET /                   → serve eshp/static/index.html
+  GET /cytoscape.min.js   → serve bundled cytoscape.js (v3.33.4, no CDN — supply chain safety)
+  GET /api/graph          → JSON: {elements: [...]} in cytoscape format (all notes + edges)
+  GET /api/note/<slug>    → JSON: {slug, desc, body, tags, edges_out, edges_in}
+  GET /events             → SSE stream: {"slug": "...", "type": "recall"} on every recall
+
+SSE strategy:
+  Each SSE client opens its own sqlite3 connection and polls last_recalled_at
+  every 500ms. Seeds last_seen on connect to avoid replaying old events.
+  Broken pipe / ConnectionResetError → clean disconnect.
+
+Thread safety:
+  Each request handler opens a fresh sqlite3.connect(check_same_thread=False).
+  Do NOT share the write-side EshpStore with request handlers.
+
+make_server(eshp_root: Path, host, port) → HTTPServer
+  Sets server.db_path = eshp_root / ".eshp.db" on the server instance.
+  Does not start serving — call serve_forever() in a daemon thread.
+
+Static files live in eshp/static/ relative to eshp_server.py:
+  index.html        — SPA with cytoscape + SSE listener
+  cytoscape.min.js  — bundled (do not load from CDN)
+
+.part-of
+-> architecture
+
+.depends-on
+-> store
+
+.related
+-> web-view
+-> cli
