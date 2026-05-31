@@ -12,7 +12,7 @@ Routes:
 import json
 import sqlite3
 import time
-from http.server import BaseHTTPRequestHandler, HTTPServer
+from http.server import BaseHTTPRequestHandler, HTTPServer, ThreadingHTTPServer
 from pathlib import Path
 
 _STATIC_DIR = Path(__file__).parent / "eshp" / "static"
@@ -156,8 +156,8 @@ class EshpRequestHandler(BaseHTTPRequestHandler):
         pass  # suppress default request logging
 
 
-def make_server(eshp_root: Path, host: str = "127.0.0.1", port: int = 7842) -> HTTPServer:
-    """Create (but do not start) an HTTPServer bound to eshp_root's DB."""
-    server = HTTPServer((host, port), EshpRequestHandler)
+def make_server(eshp_root: Path, host: str = "127.0.0.1", port: int = 7842) -> ThreadingHTTPServer:
+    """Create (but do not start) a ThreadingHTTPServer bound to eshp_root's DB."""
+    server = ThreadingHTTPServer((host, port), EshpRequestHandler)
     server.db_path = eshp_root / ".eshp.db"
     return server
