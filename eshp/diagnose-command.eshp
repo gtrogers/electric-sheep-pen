@@ -1,0 +1,59 @@
+#cli #spec #built
+
+> diagnose command — graph health checks for orphans, bloat, hubs, broken edges and stubs.
+
+Run with: `eshp diagnose`
+
+## Checks
+
+orphaned nodes
+  Notes with zero edges (no incoming, no outgoing). Islands in the graph.
+  Likely need to be linked to related notes, or may be stale/redundant.
+
+bloated notes  (body > 2000 chars)
+  Good candidates for splitting into multiple focused notes or summarising.
+  Long notes reduce recall precision and overwhelm the LLM context window.
+
+hub nodes  (degree > 2× mean AND degree ≥ 5)
+  Notes with far more connections than average. May need to be decomposed
+  or the edges may be over-specified. Often legitimate architecture hubs.
+
+dangling edges
+  Edges where src or dst does not exist in the notes table. Should normally
+  be empty (orphan cleanup in upsert_note handles these), but worth checking.
+
+bare notes  (no desc line)
+  Notes with no > summary line. The desc is used in scan results, rels output,
+  and LLM summaries — a missing desc degrades discoverability.
+
+tagless notes  (no tags)
+  Notes with no #tags. Tags drive `eshp tag` filtering and top-tag stats.
+
+stub notes  (no body AND no desc)
+  Completely empty notes — likely created but never filled in.
+
+## Output format
+
+Structured CLI output: one section per check category. Healthy checks are
+suppressed (only shown with --verbose). Issues are prefixed with ⚠ or 💡.
+A summary line at the end shows issue count and healthy check count.
+
+## Thresholds (defaults)
+
+  bloated_chars: 2000
+  hub_factor:    2.0   (degree must exceed mean × hub_factor)
+  hub_min_deg:   5     (hubs must have at least this many edges to qualify)
+  stub_chars:    50    (body shorter than this counts as no-body)
+
+## Usage in skills
+
+commit-and-dream: run diagnose, address critical issues (dangling edges,
+  orphaned nodes) if time permits; note others for next deep-dream.
+deep-dream: run diagnose first, treat output as the work queue.
+  Work through all issues, preferring orphan linking and bloat splitting.
+
+.related
+-> cli
+-> store
+-> summarise-command
+

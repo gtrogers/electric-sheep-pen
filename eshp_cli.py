@@ -673,6 +673,102 @@ def _skills_templates_dir() -> Path:
     return Path(__file__).parent / "skills"
 
 
+@cli.command()
+@click.option("--root", default=None, type=click.Path())
+@click.option("--verbose", "-v", is_flag=True, default=False, help="Show healthy checks too")
+def diagnose(root, verbose):
+    """Run graph health checks and report issues.
+
+    Checks for: orphaned nodes, bloated notes, hub nodes, dangling edges,
+    bare notes (no desc), tagless notes, and stub notes (empty body+desc).
+
+    Designed for use in commit-and-dream and deep-dream workflows.
+    """
+    store = get_store(Path(root) if root else None)
+    data = store.diagnose()
+    store.close()
+
+    s = data["stats"]
+    click.echo()
+    click.echo(
+        click.style("eshp diagnose", bold=True)
+        + f"  ·  {click.style(str(s['notes']), fg='cyan')} notes"
+        + f"  ·  {click.style(str(s['edges']), fg='green')} edges"
+    )
+    click.echo()
+
+    issue_count = 0
+
+    def _section(title: str, items: list, fmt):
+        nonlocal issue_count
+        if items:
+            issue_count += len(items)
+            click.echo(click.style(f"⚠  {title} ({len(items)})", fg="yellow", bold=True))
+            for item in items:
+                click.echo("   " + fmt(item))
+            click.echo()
+        elif verbose:
+            click.echo(click.style(f"✓  {title}", fg="green", dim=True))
+
+    _section(
+        "orphaned nodes",
+        data["orphaned_nodes"],
+        lambda s: click.style(s, fg="cyan") + "  — no connections",
+    )
+    _section(
+        "dangling edges",
+        data["dangling_edges"],
+        lambda e: (
+            click.style(e["src"], fg="red")
+            + f"  --[{e['rel']}]-->  "
+            + click.style(e["dst"], fg="red")
+            + "  (missing slug)"
+        ),
+    )
+    _section(
+        "bloated notes",
+        data["bloated_notes"],
+        lambda n: (
+            click.style(n["slug"], fg="cyan")
+            + click.style(f"  {n['chars']} chars, {n['lines']} lines", fg="white", dim=True)
+            + "  — consider splitting or summarising"
+        ),
+    )
+    _section(
+        "hub nodes",
+        data["hub_nodes"],
+        lambda n: (
+            click.style(n["slug"], fg="cyan")
+            + click.style(f"  {n['degree']} edges (mean: {n['mean_degree']})", fg="white", dim=True)
+            + "  — unusually highly connected"
+        ),
+    )
+    _section(
+        "bare notes (no desc)",
+        data["bare_notes"],
+        lambda s: click.style(s, fg="cyan") + "  — add a > summary line",
+    )
+    _section(
+        "tagless notes",
+        data["tagless_notes"],
+        lambda s: click.style(s, fg="cyan") + "  — add #tags",
+    )
+    _section(
+        "stub notes (empty body + no desc)",
+        data["stub_notes"],
+        lambda s: click.style(s, fg="cyan") + "  — fill in or delete",
+    )
+
+    if issue_count == 0:
+        click.echo(click.style("✓  graph looks healthy", fg="green", bold=True))
+    else:
+        click.echo(
+            click.style(f"{issue_count} issue(s) found", fg="yellow")
+            + "  — use `eshp recall <slug>` to load context before editing"
+        )
+    click.echo()
+
+
 @cli.command("init-skills")
 @click.argument("path", type=click.Path())
 @click.option("--force", is_flag=True, default=False, help="Overwrite existing skill files")

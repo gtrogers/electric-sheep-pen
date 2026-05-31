@@ -936,3 +936,116 @@ class TestSubgraph:
         dirs = {e["traversal_dir"] for e in result}
         assert "forward" in dirs
         assert "backward" in dirs
+
+
+# ──────────────────────────────────────────────────────── diagnose
+
+class TestDiagnose:
+    def _setup(self, store, memo_dir):
+        """Seed a small graph with a mix of issues."""
+        from eshp_parser import Relationship
+
+        # well-connected note (no issues)
+        make_note(memo_dir, "hub", tags=("core",), desc="Central note.",
+                  body="Connects everything.",
+                  rels={"related": Relationship("related", outgoing=["spoke-a", "spoke-b"], incoming=[])})
+
+        # two spoke notes (connected, have desc+tags)
+        make_note(memo_dir, "spoke-a", tags=("mod",), desc="Spoke A.", body="Some body.")
+        make_note(memo_dir, "spoke-b", tags=("mod",), desc="Spoke B.", body="Some body.")
+
+        # orphan — no edges
+        make_note(memo_dir, "orphan", tags=("misc",), desc="Lonely note.", body="Alone.")
+
+        # bare — no desc
+        make_note(memo_dir, "bare", tags=("misc",), body="Has body but no desc.")
+
+        # tagless — no tags
+        make_note(memo_dir, "tagless", desc="Has desc but no tags.", body="Has body.")
+
+        # stub — no desc, tiny body
+        make_note(memo_dir, "stub", body="Hi.")
+
+        # bloated — very long body
+        make_note(memo_dir, "bloated", tags=("doc",), desc="Verbose note.", body="x" * 3000)
+
+        store.sync()
+
+    def test_orphaned_nodes(self, store, memo_dir):
+        self._setup(store, memo_dir)
+        result = store.diagnose()
+        assert "orphan" in result["orphaned_nodes"]
+        assert "hub" not in result["orphaned_nodes"]
+        assert "spoke-a" not in result["orphaned_nodes"]
+
+    def test_bloated_notes(self, store, memo_dir):
+        self._setup(store, memo_dir)
+        result = store.diagnose(bloated_chars=2000)
+        slugs = [n["slug"] for n in result["bloated_notes"]]
+        assert "bloated" in slugs
+        assert "hub" not in slugs
+
+    def test_bloated_note_has_chars_and_lines(self, store, memo_dir):
+        self._setup(store, memo_dir)
+        result = store.diagnose(bloated_chars=2000)
+        entry = next(n for n in result["bloated_notes"] if n["slug"] == "bloated")
+        assert entry["chars"] == 3000
+        assert entry["lines"] >= 1
+
+    def test_bare_notes(self, store, memo_dir):
+        self._setup(store, memo_dir)
+        result = store.diagnose()
+        assert "bare" in result["bare_notes"]
+        assert "stub" in result["bare_notes"]
+        assert "hub" not in result["bare_notes"]
+
+    def test_tagless_notes(self, store, memo_dir):
+        self._setup(store, memo_dir)
+        result = store.diagnose()
+        assert "tagless" in result["tagless_notes"]
+        assert "stub" in result["tagless_notes"]
+        assert "hub" not in result["tagless_notes"]
+
+    def test_stub_notes(self, store, memo_dir):
+        self._setup(store, memo_dir)
+        result = store.diagnose(stub_chars=50)
+        assert "stub" in result["stub_notes"]
+        assert "hub" not in result["stub_notes"]
+        assert "bloated" not in result["stub_notes"]
+
+    def test_no_dangling_edges_clean_graph(self, store, memo_dir):
+        self._setup(store, memo_dir)
+        result = store.diagnose()
+        assert result["dangling_edges"] == []
+
+    def test_dangling_edges_detected(self, store, memo_dir):
+        make_note(memo_dir, "real", tags=("x",), desc="Exists.")
+        store.sync()
+        # manually insert a dangling edge
+        store.conn.execute("INSERT INTO edges(src, rel, dst) VALUES (?, ?, ?)",
+                           ("ghost", "related", "real"))
+        store.conn.commit()
+        result = store.diagnose()
+        assert any(e["src"] == "ghost" for e in result["dangling_edges"])
+
+    def test_hub_nodes_detected(self, store, memo_dir):
+        self._setup(store, memo_dir)
+        # hub has 2 outgoing (spoke-a, spoke-b); spokes each have 1 incoming
+        # mean degree ≈ 0.5; hub_min_degree=1 ensures threshold=1, hub(2)>1 ✓
+        result = store.diagnose(hub_factor=1.0, hub_min_degree=1)
+        slugs = [n["slug"] for n in result["hub_nodes"]]
+        assert "hub" in slugs
+
+    def test_healthy_graph_all_empty(self, store, memo_dir):
+        from eshp_parser import Relationship
+        make_note(memo_dir, "a", tags=("t",), desc="Note A.", body="Body A.",
+                  rels={"related": Relationship("related", outgoing=["b"], incoming=[])})
+        make_note(memo_dir, "b", tags=("t",), desc="Note B.", body="Body B.")
+        store.sync()
+        result = store.diagnose()
+        assert result["orphaned_nodes"] == []
+        assert result["bloated_notes"] == []
+        assert result["dangling_edges"] == []
+        assert result["bare_notes"] == []
+        assert result["tagless_notes"] == []
+        assert result["stub_notes"] == []

@@ -18,6 +18,10 @@ project.
 
 After committing...
 
+- Run `eshp diagnose` and review the output:
+  - **Critical**: fix dangling edges (broken connections) immediately if found
+  - **Worth addressing now**: orphaned nodes (no connections) — link or delete
+  - **Note for context**: flag bloated notes, hub nodes, stubs — mention in the dream commit but don't block on them
 - Reflect on the coding session and ensure the eshp memory graph is
   up to date.
 - Do not try to maintain the entire graph, focus on updating, adding

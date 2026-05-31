@@ -356,7 +356,98 @@ class EshpStore:
             ],
         }
 
-    def scan(self, query: str, limit: int = 20) -> list[dict]:
+    def diagnose(
+        self,
+        bloated_chars: int = 2000,
+        hub_factor: float = 2.0,
+        hub_min_degree: int = 5,
+        stub_chars: int = 50,
+    ) -> dict:
+        """Run graph health checks and return a structured findings dict.
+
+        Returns a dict with keys:
+          stats           — {notes, edges}
+          orphaned_nodes  — [slug, ...] notes with zero edges
+          bloated_notes   — [{slug, chars, lines}, ...] body > bloated_chars
+          hub_nodes       — [{slug, degree, mean_degree}, ...] degree > mean*hub_factor
+          dangling_edges  — [{src, rel, dst}, ...] edges with missing src/dst
+          bare_notes      — [slug, ...] notes with no desc
+          tagless_notes   — [slug, ...] notes with no tags
+          stub_notes      — [slug, ...] notes with no body and no desc
+        """
+        # ── Degree map ────────────────────────────────────────────────────────
+        degrees: dict[str, int] = {}
+        for row in self.conn.execute("SELECT slug FROM notes"):
+            degrees[row["slug"]] = 0
+        for row in self.conn.execute(
+            "SELECT src, dst FROM edges"
+        ):
+            if row["src"] in degrees:
+                degrees[row["src"]] += 1
+            if row["dst"] in degrees:
+                degrees[row["dst"]] += 1
+
+        mean_degree = sum(degrees.values()) / len(degrees) if degrees else 0.0
+        hub_threshold = max(mean_degree * hub_factor, hub_min_degree)
+
+        # ── Checks ────────────────────────────────────────────────────────────
+        orphaned: list[str] = [s for s, d in degrees.items() if d == 0]
+
+        bloated: list[dict] = []
+        hub_nodes: list[dict] = []
+        bare: list[str] = []
+        tagless: list[str] = []
+        stubs: list[str] = []
+
+        for row in self.conn.execute(
+            "SELECT n.slug, n.desc, n.body, "
+            "  (SELECT COUNT(*) FROM tags t WHERE t.slug = n.slug) AS tag_count "
+            "FROM notes n ORDER BY n.slug"
+        ):
+            slug = row["slug"]
+            body = row["body"] or ""
+            desc = (row["desc"] or "").strip()
+
+            if len(body) > bloated_chars:
+                bloated.append({
+                    "slug": slug,
+                    "chars": len(body),
+                    "lines": body.count("\n") + 1,
+                })
+            if degrees[slug] > hub_threshold:
+                hub_nodes.append({
+                    "slug": slug,
+                    "degree": degrees[slug],
+                    "mean_degree": round(mean_degree, 1),
+                })
+            if not desc:
+                bare.append(slug)
+            if row["tag_count"] == 0:
+                tagless.append(slug)
+            if not desc and len(body) < stub_chars:
+                stubs.append(slug)
+
+        # ── Dangling edges ────────────────────────────────────────────────────
+        all_slugs = set(degrees.keys())
+        dangling: list[dict] = [
+            {"src": r["src"], "rel": r["rel"], "dst": r["dst"]}
+            for r in self.conn.execute("SELECT src, rel, dst FROM edges")
+            if r["src"] not in all_slugs or r["dst"] not in all_slugs
+        ]
+
+        return {
+            "stats": {"notes": len(degrees), "edges": self.stats()["edges"]},
+            "orphaned_nodes": sorted(orphaned),
+            "bloated_notes": sorted(bloated, key=lambda x: x["chars"], reverse=True),
+            "hub_nodes": sorted(hub_nodes, key=lambda x: x["degree"], reverse=True),
+            "dangling_edges": dangling,
+            "bare_notes": bare,
+            "tagless_notes": tagless,
+            "stub_notes": stubs,
+        }
+
+
+    def scan(self, query: str, limit: int = 10) -> list[dict]:
         """Scored broad search: slug, tag, rel name, body, and 1-hop expansion.
 
         Each signal contributes points; scores accumulate across multiple matches.
