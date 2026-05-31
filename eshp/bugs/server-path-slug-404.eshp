@@ -1,0 +1,26 @@
+#bug #server #spec
+
+> BUG: /api/note/<slug> returns 404 for path-slugs because the server doesn't URL-decode the slug.
+
+Introduced when directory support added path-based slugs (e.g. modules/cli).
+
+Root cause:
+  Frontend fetches: /api/note/ + encodeURIComponent(slug)
+  encodeURIComponent('modules/cli') → 'modules%2Fcli'
+  Server extracts slug as 'modules%2Fcli' — no URL-decode step.
+  DB query: WHERE n.slug='modules%2Fcli' → no match → 404.
+
+Fix:
+  In eshp_server.py do_GET, after extracting slug from self.path:
+    from urllib.parse import unquote
+    slug = unquote(self.path[len("/api/note/"):])
+  This converts %2F → / before the DB lookup.
+  Also handles literal-slash form (/api/note/modules/cli) correctly — unquote is a no-op.
+
+Tests to add (TestApiNote):
+  test_path_slug_percent_encoded  — GET /api/note/modules%2Fparser → 200
+  test_path_slug_literal_slash    — GET /api/note/modules/parser  → 200
+
+.related
+-> modules/server
+-> design/directory-support

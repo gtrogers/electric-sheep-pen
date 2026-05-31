@@ -15,6 +15,7 @@ import sys
 import time
 from http.server import BaseHTTPRequestHandler, HTTPServer, ThreadingHTTPServer
 from pathlib import Path
+from urllib.parse import unquote
 
 _STATIC_DIR = Path(__file__).parent / "eshp" / "static"
 _PEER_RESET_ERRORS = (ConnectionResetError, BrokenPipeError)
@@ -46,7 +47,7 @@ class EshpRequestHandler(BaseHTTPRequestHandler):
         elif self.path == "/api/graph":
             self._api_graph()
         elif self.path.startswith("/api/note/"):
-            slug = self.path[len("/api/note/"):]
+            slug = unquote(self.path[len("/api/note/"):])
             self._api_note(slug)
         elif self.path == "/events":
             self._sse_events()

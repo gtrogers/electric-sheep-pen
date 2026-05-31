@@ -43,6 +43,7 @@ def populated_store(tmp_path):
         body="Beta body",
         rels={"depends-on": Relationship("depends-on", outgoing=["alpha"], incoming=[])},
     ))
+    s.upsert_note(_note("modules/parser", desc="Path slug note", body="Parser body"))
     s.conn.commit()
     yield s
     s.close()
@@ -174,3 +175,17 @@ class TestApiNote:
         with pytest.raises(urllib.error.HTTPError) as exc_info:
             get(base + "/api/note/does-not-exist")
         assert exc_info.value.code == 404
+
+    def test_path_slug_percent_encoded(self, server):
+        """encodeURIComponent('modules/parser') → modules%2Fparser — server must URL-decode."""
+        base, _ = server
+        _, data = get_json(base + "/api/note/modules%2Fparser")
+        assert data["slug"] == "modules/parser"
+        assert data["desc"] == "Path slug note"
+
+    def test_path_slug_literal_slash(self, server):
+        """Literal slash in URL path also resolves the path-slug correctly."""
+        base, _ = server
+        _, data = get_json(base + "/api/note/modules/parser")
+        assert data["slug"] == "modules/parser"
+        assert data["desc"] == "Path slug note"
