@@ -24,6 +24,8 @@ Tests (TestApiNote in tests/test_server.py):
 PITFALL: any route that echoes a URL path segment into a DB query needs unquote().
   Literal-slash URLs work by accident (startswith match still fires); only %2F form breaks.
 
-.related
+.fixed-in
 -> modules/server
+
+.introduced-by
 -> design/directory-support

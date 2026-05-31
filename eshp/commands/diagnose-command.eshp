@@ -52,11 +52,11 @@ commit-and-dream: run diagnose, address critical issues (dangling edges,
 deep-dream: run diagnose first, treat output as the work queue.
   Work through all issues, preferring orphan linking and bloat splitting.
 
-.related
--> modules/cli
--> modules/store
--> commands/summarise-command
-
 .part-of
--> modules/architecture
+-> modules/cli
 
+.uses
+-> modules/store
+
+.complements
+-> commands/summarise-command

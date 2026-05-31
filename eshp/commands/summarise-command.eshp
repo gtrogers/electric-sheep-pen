@@ -25,6 +25,8 @@ Store methods:
   store.summarise(top_n=10)     — returns dict: stats, top_tags, top_rels,
                                   recent_notes, recent_recalls
 
-.related
-<- modules/cli
+.implemented-in
+-> modules/cli
+
+.uses
 -> modules/store

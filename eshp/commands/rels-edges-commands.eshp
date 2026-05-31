@@ -14,6 +14,8 @@ edges [--rel REL]
   to a specific relationship name. Ordered by rel, src, dst.
   Store method: all_edges(rel=None) → list[dict{src, rel, dst}]
 
-.related
-<- modules/cli
+.implemented-in
+-> modules/cli
+
+.uses
 -> modules/store

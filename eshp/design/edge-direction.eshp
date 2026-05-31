@@ -37,6 +37,6 @@ becomes the src — creating a ghost node with a space in its slug. It won't app
 in the notes table so cytoscape (and anything else iterating notes) will miss it.
 Caught by the diagnose dangling_edges check.
 
-.related
+.implemented-in
 -> modules/store
 -> modules/parser

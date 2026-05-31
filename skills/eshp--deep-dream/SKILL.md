@@ -46,3 +46,12 @@ Maintain memory accuracy
 - add any missing tags or relationships
 
 Once done commit the updated memory graph files as a new deep-dream commit.
+
+Improve relationships
+
+- Rels like 'related' and 'linked-to' don't provide much semantic meaning
+  avoid them in favour of more specific relationships like 'caused', 'blocks',
+  'implements', 'waiting-for', etc
+- General rule: do not use generic relationships if a more specific relationship
+  would provide more meaning. Replace generic relationship names with specific
+  ones as the graph grows and meaning becomes apparent.

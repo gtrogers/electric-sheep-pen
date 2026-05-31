@@ -28,6 +28,8 @@ Slugs — root-relative POSIX paths without .eshp extension (path.stem for top-l
 
 Tags — no # prefix in DB or EshpNote.tags. Only present in raw file text.
 
-.related
+.references
 -> modules/architecture
+
+.paired-with
 -> dev/dev-workflow

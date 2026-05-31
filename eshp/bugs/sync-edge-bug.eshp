@@ -1,4 +1,4 @@
-#bug #store #edges
+#bug #store #edges #fixed
 
 > BUG (FIXED): <- declarations were silently wiped when the source note was resynced.
 
@@ -52,6 +52,8 @@ delete_note(X):
 5 tests in TestIncomingDeclPersistence cover: source resync, declarer deletion,
 declarer dropping the edge, dual-declaration, and sync-order independence.
 
-.related
+.fixed-in
 -> modules/store
+
+.documented-in
 -> design/edge-direction

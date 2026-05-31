@@ -20,150 +20,43 @@ TRAP — record_recall must be called from every discovery command:
   `eshp recall` called it; `eshp scan` did not, so scan activity was invisible
   in the web view. Both commands now call record_recall for each result.
 
-HIGH feasibility. All three main sub-problems (graph API, interactive browsing,
-live SSE activity) are solvable without adding any mandatory new dependencies.
-
-## What is being planned
-
-A `serve` command that starts a local HTTP server and opens a browser showing
-the full memory graph rendered with cytoscape.js. Clicking a node shows the note
-body. Server-sent events (SSE) make nodes pulse/glow when the agent accesses
-a memory via `recall`, `scan`, etc.
-
-## Architecture
-
-### New files
-- `eshp_server.py` — HTTP request handler (stdlib http.server), SSE logic, API routes
-- `eshp/static/index.html` — Single-page app: cytoscape.js + SSE listener
-- `eshp/static/cytoscape.min.js` — bundled cytoscape.js (do NOT load from CDN — supply chain risk)
-- pyproject.toml package data entry for `eshp/static/`
-
-### New CLI command
-- `eshp serve [--port 7842] [--host 127.0.0.1]` — start server, optionally open browser
-
-### API surface (all stdlib, no framework required)
-- `GET /`                    → serve index.html
-- `GET /api/graph`           → all notes + edges in cytoscape elements JSON
-- `GET /api/note/<slug>`     → single note detail (body, tags, edges_in, edges_out)
-- `GET /events`              → SSE stream (text/event-stream, keep-alive)
-
-## Cytoscape.js data format
-
-```json
-{
-  "elements": [
-    {"data": {"id": "slug", "label": "slug", "desc": "..."}},
-    {"data": {"id": "src:rel:dst", "source": "src", "target": "dst", "rel": "rel"}}
-  ]
-}
-```
-
-Load cytoscape from CDN (unpkg.com) — no bundling needed for MVP.
-
-## SSE cross-process strategy
-
-The web server and eshp CLI commands are separate processes.
-Communication via the shared SQLite DB (already in use):
-
-1. `record_recall(slug)` already writes `last_recalled_at` to notes table.
-2. The SSE handler polls `SELECT slug, last_recalled_at FROM notes ORDER BY
-   last_recalled_at DESC LIMIT 10` every ~500 ms.
-3. When a `last_recalled_at` value is newer than the last seen timestamp,
-   push `data: {"slug": "...", "type": "recall"}\n\n` to all connected clients.
-4. Frontend receives event → `cy.getElementById(slug).addClass('active')` →
-   CSS keyframe pulse animation → remove class after 2 s.
-
-No new IPC mechanism needed — SQLite polling is the simplest correct solution.
-
-## SSE server implementation (stdlib only)
-
-Use `http.server.BaseHTTPRequestHandler`. For `/events`:
-- `send_response(200)`, `send_header('Content-Type', 'text/event-stream')`
-- Loop: poll DB, write events, flush, sleep 0.5 s
-- Broken pipe → client disconnect → clean up
-- Run server in a `threading.Thread` (daemon) so the CLI process stays alive
-
-## Interactive browsing
-
-Pure frontend:
-- `cy.on('tap', 'node', fn)` → `fetch('/api/note/' + slug)` → render detail panel
-- No backend change beyond the existing `/api/note/<slug>` endpoint
-
-## Dependencies
-
-ZERO new required dependencies — http.server + threading are stdlib.
-Optional: could swap http.server for Flask later for cleaner code, but not needed for MVP.
-
-Cytoscape.js MUST be bundled as package data (supply chain risk — do not load from CDN).
-Download the minified build and ship as `eshp/static/cytoscape.min.js`.
-
-## Package data change needed
-
-Add to pyproject.toml:
-```
-[tool.hatch.build.targets.wheel]
-include = ["eshp_cli.py", "eshp_parser.py", "eshp_store.py", "eshp_server.py", "skills/**", "eshp/static/**"]
-```
-
-## Risks and sharp edges
-
-- **Thread safety**: http.server + SQLite — use `check_same_thread=False` and a
-  dedicated read-only connection in the server, separate from the write connection.
-  Do NOT share the EshpStore instance across threads.
-- **SSE client accumulation**: if many clients connect without disconnecting, the poll
-  loop multiplies. Keep a set of active response objects; prune on broken pipe.
-- **CDN dependency**: RESOLVED — bundle cytoscape.min.js as package data (supply chain safety).
-- **Port conflicts**: default port 7842 is obscure enough; still expose --port flag.
-- **Large graphs**: cytoscape.js handles ~1000 nodes fine with a force-directed layout
-  (cose or cola). Above that, consider filtered views (tag filter, depth limit).
-
-## Cytoscape version
-
-Bundled cytoscape.js v3.33.4. Re-download manually if upgrading.
-File: `eshp/static/cytoscape.min.js`
-
-## serve command (eshp_cli.py)
+## Architecture (built)
 
   eshp serve [--port 7842] [--host 127.0.0.1] [--root PATH] [--no-browser]
 
-On startup:
-  1. Full sync (same as watch)
-  2. Start HTTP server (make_server from eshp_server) in a daemon thread
-  3. Open browser at http://host:port (unless --no-browser)
-  4. Run EshpHandler + watchdog Observer in main thread loop
+Starts ThreadingHTTPServer in a daemon thread + watchdog observer in main thread.
+Static files: eshp/static/index.html (SPA), eshp/static/cytoscape.min.js (bundled v3.33.4).
 
-Ctrl-C: stop observer, shutdown HTTPServer, close store.
+API surface:
+  GET /                   → index.html
+  GET /cytoscape.min.js   → bundled cytoscape.js (v3.33.4, no CDN — supply chain safety)
+  GET /api/graph          → {elements: [...]} in cytoscape format (all notes + edges)
+  GET /api/note/<slug>    → {slug, desc, body, tags, edges_out, edges_in}
+  GET /events             → SSE stream: {"slug": "...", "type": "recall"} on recall
 
-## Thread safety detail
+SSE strategy: each client polls last_recalled_at via its own sqlite3 connection every 500ms.
+Seeds last_seen on connect to avoid replaying old events. Broken pipe = clean disconnect.
+Thread safety: each request handler opens a fresh sqlite3.connect(check_same_thread=False).
+Do NOT share the write-side EshpStore with request handlers.
 
-Each request handler opens its own short-lived sqlite3.connect(check_same_thread=False).
-Do NOT share the write-side EshpStore instance with request handlers.
-The SSE loop opens one connection per client and closes it on disconnect.
+Cytoscape.js data format:
+  {"elements": [
+    {"data": {"id": "slug", "label": "slug", "desc": "..."}},
+    {"data": {"id": "src:rel:dst", "source": "src", "target": "dst", "rel": "rel"}}
+  ]}
 
-## Estimated scope
-
-- `eshp_server.py`: ~200 lines
-- `eshp/static/index.html`: ~150 lines (HTML + inline JS/CSS)
-- `eshp/static/cytoscape.min.js`: bundled (no edits needed)
-- CLI changes (`eshp_cli.py`): ~20 lines (serve command)
-- `pyproject.toml`: 1-line change
-- Tests (`tests/test_server.py`): ~8 tests (routes + 404 + SSE format)
-- Total: small-to-medium feature, one focused session
-
-## Open questions
-
-1. DECIDED: `serve` runs the watchdog (full sync on startup, file watcher while serving) —
-   same behaviour as `watch`, so the graph stays live while the browser is open.
-2. DECIDED: Bundle cytoscape.js as `eshp/static/cytoscape.min.js` — no CDN (supply chain safety).
-3. Layout algorithm: `cose` (built-in, no extra dep) vs `cola` (needs cytoscape-cola extension)?
-   `cose` is the safe default.
-4. Should node colour encode something (e.g. tag category, recency)?
+ZERO new runtime dependencies — http.server + threading are stdlib.
+Cytoscape.js v3.33.4 bundled as eshp/static/cytoscape.min.js. Re-download manually if upgrading.
 
 .part-of
 -> modules/architecture
 
-.related
+.implemented-in
 -> modules/cli
--> modules/store
--> commands/graph-command
 -> modules/server
+
+.uses
+-> modules/store
+
+.complements
+-> commands/graph-command

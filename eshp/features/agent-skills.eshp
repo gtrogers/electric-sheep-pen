@@ -27,5 +27,5 @@ Note: skills/ at the repo root is the canonical template source.
 The .github/skills/ folder in this repo is an example instantiation of those templates.
 When templates are updated, re-run init-skills to propagate changes.
 
-.related
+.implemented-in
 -> modules/cli

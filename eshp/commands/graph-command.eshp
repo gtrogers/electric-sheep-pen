@@ -38,7 +38,11 @@ Store method:
     both     → SQL WHERE src IN (frontier) OR dst IN (frontier)
   Note: store default depth=3; CLI graph command default depth=1.
 
-.related
+.implemented-in
 -> modules/cli
+
+.uses
 -> modules/store
+
+.complements
 <- commands/rels-edges-commands

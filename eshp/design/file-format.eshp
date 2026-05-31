@@ -39,6 +39,8 @@ Rules:
     \\     → body text starting with \
 - render_eshp() is the canonical serialiser — use it, don't hand-roll
 
-.related
+.parsed-by
 -> modules/parser
+
+.documents
 -> design/edge-direction

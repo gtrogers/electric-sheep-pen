@@ -35,8 +35,10 @@ Relationship references must always use the FULL path-slug:
 
 Relative refs (-> ./sibling), ambiguous short-slug resolution, .eshpignore, rename/move tooling.
 
-.related
+.extends
 -> design/file-format
+
+.implemented-in
 -> modules/parser
 -> modules/store
 -> modules/cli

@@ -42,6 +42,8 @@ Key test files:
   tests/test_server.py    — HTTP server route tests (starts real server on random port)
   tests/test_scenarios.py — scenario/E2E tests: watchdog, file→sync→CLI, file→sync→API, SSE recall
 
-.related
+.paired-with
 -> dev/conventions
+
+.references
 -> modules/architecture

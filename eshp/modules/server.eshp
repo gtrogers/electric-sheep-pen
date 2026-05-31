@@ -47,6 +47,8 @@ Static files live in eshp/static/ relative to eshp_server.py:
 .depends-on
 -> modules/store
 
-.related
+.implements
 -> features/web-view
+
+.invoked-by
 -> modules/cli
