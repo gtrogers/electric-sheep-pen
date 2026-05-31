@@ -14,7 +14,7 @@ The CLI is the only layer allowed to call both parser and store together.
 The server reads from SQLite directly (never through EshpStore) — own connection per request.
 
 .contains
--> parser
--> store
--> cli
--> server
+-> modules/parser
+-> modules/store
+-> modules/cli
+-> modules/server

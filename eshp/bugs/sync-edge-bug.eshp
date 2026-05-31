@@ -53,5 +53,5 @@ delete_note(X):
 declarer dropping the edge, dual-declaration, and sync-order independence.
 
 .related
--> store
--> edge-direction
+-> modules/store
+-> design/edge-direction

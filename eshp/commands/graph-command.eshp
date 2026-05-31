@@ -39,6 +39,6 @@ Store method:
   Note: store default depth=3; CLI graph command default depth=1.
 
 .related
--> cli
--> store
-<- rels-edges-commands
+-> modules/cli
+-> modules/store
+<- commands/rels-edges-commands

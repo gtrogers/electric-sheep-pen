@@ -28,4 +28,4 @@ The .github/skills/ folder in this repo is an example instantiation of those tem
 When templates are updated, re-run init-skills to propagate changes.
 
 .related
--> cli
+-> modules/cli

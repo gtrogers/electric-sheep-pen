@@ -26,5 +26,5 @@ Store methods:
                                   recent_notes, recent_recalls
 
 .related
-<- cli
--> store
+<- modules/cli
+-> modules/store

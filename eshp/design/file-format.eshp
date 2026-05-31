@@ -40,5 +40,5 @@ Rules:
 - render_eshp() is the canonical serialiser — use it, don't hand-roll
 
 .related
--> parser
--> edge-direction
+-> modules/parser
+-> design/edge-direction

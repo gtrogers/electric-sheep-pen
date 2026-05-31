@@ -42,5 +42,5 @@ Key test files:
   tests/test_server.py  — HTTP server route tests (starts real server on random port)
 
 .related
--> conventions
--> architecture
+-> dev/conventions
+-> modules/architecture

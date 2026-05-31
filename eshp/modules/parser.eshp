@@ -32,4 +32,4 @@ TRAP: body lines starting with . are parsed as relationship block headers.
   Fix: rephrase to avoid a leading dot, or use render_eshp() which auto-escapes these lines.
 
 .part-of
--> architecture
+-> modules/architecture

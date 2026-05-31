@@ -160,10 +160,10 @@ The SSE loop opens one connection per client and closes it on disconnect.
 4. Should node colour encode something (e.g. tag category, recency)?
 
 .part-of
--> architecture
+-> modules/architecture
 
 .related
--> cli
--> store
--> graph-command
--> server
+-> modules/cli
+-> modules/store
+-> commands/graph-command
+-> modules/server

@@ -15,5 +15,5 @@ edges [--rel REL]
   Store method: all_edges(rel=None) → list[dict{src, rel, dst}]
 
 .related
-<- cli
--> store
+<- modules/cli
+-> modules/store

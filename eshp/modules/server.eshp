@@ -37,11 +37,11 @@ Static files live in eshp/static/ relative to eshp_server.py:
   cytoscape.min.js  — bundled (do not load from CDN)
 
 .part-of
--> architecture
+-> modules/architecture
 
 .depends-on
--> store
+-> modules/store
 
 .related
--> web-view
--> cli
+-> features/web-view
+-> modules/cli

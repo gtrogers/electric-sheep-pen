@@ -34,9 +34,9 @@ Commands:
   summarise           compact graph summary for agent context injection
 
 .part-of
--> architecture
+-> modules/architecture
 
 .depends-on
--> store
--> parser
--> server
+-> modules/store
+-> modules/parser
+-> modules/server

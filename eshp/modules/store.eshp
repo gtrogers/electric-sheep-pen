@@ -38,7 +38,7 @@ Always call store.close() when finished.
 DB file lives at: <eshp_root>/.eshp.db
 
 .part-of
--> architecture
+-> modules/architecture
 
 .depends-on
--> edge-direction
+-> design/edge-direction

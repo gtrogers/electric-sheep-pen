@@ -53,10 +53,10 @@ deep-dream: run diagnose first, treat output as the work queue.
   Work through all issues, preferring orphan linking and bloat splitting.
 
 .related
--> cli
--> store
--> summarise-command
+-> modules/cli
+-> modules/store
+-> commands/summarise-command
 
 .part-of
--> architecture
+-> modules/architecture
 

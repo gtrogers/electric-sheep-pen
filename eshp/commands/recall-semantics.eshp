@@ -36,5 +36,5 @@ This metadata is DB-only (.eshp.db, gitignored). The eshp summarise command
 surfaces recently recalled slugs — useful for agents to see what was recently in focus.
 
 .related
--> cli
--> store
+-> modules/cli
+-> modules/store
