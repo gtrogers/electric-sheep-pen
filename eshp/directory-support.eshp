@@ -1,53 +1,39 @@
-#spec design feature
+#spec #design #built
 
-> Support for organising notes into subdirectories within eshp/.
+> Notes can be organised into subdirectories within eshp/ — BUILT.
 
-## Problem
+## What changed
 
-All notes currently live flat in eshp/. Slugs are derived from `path.stem` (filename only).
-Three hard constraints make this flat-only:
-  1. `sync()` uses `glob("*.eshp")` — not recursive
-  2. `parse_eshp()` uses `path.stem` — no directory context
-  3. Watchdog uses `recursive=False`
+Slugs are now root-relative POSIX paths without .eshp extension.
 
-## Design: path-based slugs
+  eshp/store.eshp           → slug: store           (top-level, unchanged)
+  eshp/concepts/auth.eshp   → slug: concepts/auth
+  eshp/modules/api.eshp     → slug: modules/api
 
-Slugs become root-relative POSIX paths (no .eshp extension).
+Always `/` separator (POSIX), even on Windows. No DB schema change — slugs are plain TEXT.
+Top-level notes are fully backward compatible.
 
-  eshp/store.eshp           → slug: store           (unchanged)
-  eshp/concepts/auth.eshp   → slug: concepts/auth   (new)
-  eshp/modules/api.eshp     → slug: modules/api     (new)
+## How it works
 
-Always `/` separator (POSIX), even on Windows. DB stores them as plain TEXT — no schema change.
-Top-level notes are fully backward compatible. Relationship refs must use full path-slug.
+  eshp_parser.py  parse_eshp(path, root=None)
+    When root is given: slug = path.relative_to(root).as_posix().removesuffix(".eshp")
+    When root is None:  slug = path.stem  (backward-compat default)
 
-## Changes required
+  eshp_store.py   sync() uses rglob("*.eshp") and passes root=self.root to parse_eshp
 
-### eshp_parser.py
-Add optional `root: Path = None` param to `parse_eshp()`.
-When root is provided: slug = path.relative_to(root).as_posix().removesuffix(".eshp")
-When root is None (default): slug = path.stem  ← backward compat for tests and `eshp new`
+  eshp_cli.py     EshpHandler derives slug via path.relative_to(store.root).as_posix()
+                  Both watchdogs run recursive=True
+                  eshp new concepts/auth  creates parent dirs automatically
 
-### eshp_store.py
-sync(): change glob("*.eshp") → rglob("*.eshp")
-sync(): pass root=self.root to parse_eshp()
+## Key rule
 
-### eshp_cli.py
-EshpHandler._sync_file / _delete_file: path.stem → path.relative_to(store.root).as_posix().removesuffix(".eshp")
-EshpHandler._sync_file: pass root=store.root to parse_eshp()
-observer.schedule(): recursive=False → recursive=True  (both watch and serve)
-eshp new: store.root / f"{slug}.eshp" → (store.root / slug).with_suffix(".eshp"); mkdir parents
+Relationship references must always use the FULL path-slug:
+  -> concepts/auth       ✓  refers to eshp/concepts/auth.eshp
+  -> auth                ✗  will be a dangling edge (ghost node) if no eshp/auth.eshp exists
 
 ## Out of scope
-- Relative refs within files (e.g. -> ./sibling) — all refs are absolute from root
-- Ambiguous short-slug resolution
-- .eshpignore
-- Rename/move tooling
 
-## Test plan (TDD order)
-1. test_parser.py: root param (no root→stem, with root→path-slug, top-level stays same)
-2. test_store.py: sync finds subdir notes, path-slug upsert/get/delete, edges across dirs, search
-3. CLI: EshpHandler + eshp new (subdirectory creation)
+Relative refs (-> ./sibling), ambiguous short-slug resolution, .eshpignore, rename/move tooling.
 
 .related
 -> file-format

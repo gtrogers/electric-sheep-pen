@@ -15,7 +15,9 @@ Commit convention — EshpStore does not auto-commit.
 Always call store.conn.commit() after mutations.
 Always call store.close() when done.
 
-Slugs — kebab-case filenames without the .eshp extension. path.stem everywhere.
+Slugs — root-relative POSIX paths without .eshp extension (path.stem for top-level, e.g. `store`;
+         `concepts/auth` for eshp/concepts/auth.eshp). Always use full path-slug in relationships.
+         TRAP: `-> auth` will NOT match `concepts/auth.eshp` — must write `-> concepts/auth`.
 
 Tags — no # prefix in DB or EshpNote.tags. Only present in raw file text.
 
