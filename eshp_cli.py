@@ -218,6 +218,7 @@ def serve(port, host, root, no_browser):
         store.close()
 
 
+@cli.command()
 @click.argument("slug")
 @click.option("--tags", default="", help="Comma-separated tags")
 @click.option("--root", default=None, type=click.Path())

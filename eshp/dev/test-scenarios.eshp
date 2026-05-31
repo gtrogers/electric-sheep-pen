@@ -1,0 +1,72 @@
+#dev #test #spec
+
+> Scenario / end-to-end tests that verify intended flows across component boundaries.
+
+All unit tests are in test_parser.py, test_store.py, test_server.py, test_cli.py.
+Scenario tests live in tests/test_scenarios.py.
+
+## Why scenario tests exist
+
+Unit tests insert EshpNote objects directly into the store — they never touch the file system
+or exercise the parser → store → CLI → server chain as a whole.
+The scenario tests verify that the full flow works end-to-end.
+
+## Intended flows to cover
+
+### Watchdog flow (TestWatchdog)
+  1. Observer + EshpHandler watching a tmp_path directory
+  2. .eshp file created/modified/deleted on disk
+  3. EshpHandler fires on_created/on_modified/on_deleted
+  4. Store is updated (upsert or delete + commit)
+  Test strategy: write/edit/delete file, poll DB with _wait_for() until change appears.
+  Covers: recursive=True (subdir file picked up via path-slug).
+  NOTE: EshpHandler was completely untested before this — highest-risk gap.
+
+### File → sync → CLI flow (TestFileSyncCLI)
+  1. Write real .eshp files to tmp_path
+  2. Call store.sync() 
+  3. Invoke CLI commands via CliRunner (search, scan, recall, show)
+  4. Verify output contains expected slug/body/edge content
+  Also tests `eshp new` with EDITOR=true to skip editor open.
+
+### File → sync → web API flow (TestWebViewEndToEnd)
+  1. Write real .eshp files to tmp_path
+  2. Call store.sync()
+  3. Start ThreadingHTTPServer (same pattern as test_server.py)
+  4. GET /api/graph — verify nodes/edges reflect actual files
+  5. GET /api/note/<slug> — verify body/desc/tags from file
+  6. GET /api/note/dir%2Fslug — verify path-slug URL-decoding with real file
+
+### SSE recall flow (TestSSERecall)
+  1. Start server
+  2. Open GET /events in a daemon thread (blocking read), collect to queue.Queue
+  3. Call store.record_recall(slug)
+  4. Assert queue receives {"slug": "...", "type": "recall"} event within 3s
+  This is the only test for the SSE endpoint.
+
+## Polling helper
+
+  def _wait_for(fn, timeout=5, interval=0.1):
+      """Poll fn() until truthy or timeout. Raises AssertionError on timeout."""
+      deadline = time.time() + timeout
+      while time.time() < deadline:
+          if fn():
+              return
+          time.sleep(interval)
+      raise AssertionError("Timed out waiting for condition")
+
+Used by watchdog and SSE tests where file system / DB events are async.
+
+## eshp new test strategy
+
+  EDITOR=true makes eshp new skip the editor and exit immediately (true is /usr/bin/true).
+  The note file and parent dirs are created before $EDITOR is invoked, so the test can
+  check the file exists and DB contains the note after the command returns.
+
+.part-of
+-> dev/dev-workflow
+
+.related
+-> dev/conventions
+-> modules/cli
+-> modules/server
