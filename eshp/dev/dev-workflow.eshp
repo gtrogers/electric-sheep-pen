@@ -4,6 +4,9 @@
 
 How to work on this project.
 
+Install (end-user, via pipx):
+  pipx install git+https://github.com/gtrogers/electric-sheep-pen.git
+
 Install (dev mode):
   pip install -e ".[dev]"
 

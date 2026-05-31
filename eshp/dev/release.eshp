@@ -1,0 +1,23 @@
+#dev #alpha
+
+> Open source alpha release — current status and pending tasks.
+
+Status: alpha. The core loop (parse → store → query → agent skills) is built
+and tested. API and file format may still change.
+
+README was rewritten to target external users — covers: why it exists, pipx
+install, bootstrap quickstart (init-skills → watch → new notes → ask agent),
+the 4-skill workflow, file format, command tables, and development setup.
+
+User-facing install (requires Python 3.11+):
+  pipx install git+https://github.com/gtrogers/electric-sheep-pen.git
+
+PENDING: GitHub remote has not been set up yet.
+  git remote add origin git@github.com:gtrogers/electric-sheep-pen.git
+  git push -u origin main
+  Update README and pyproject.toml if the repo name differs.
+
+Not yet on PyPI — install from GitHub for now.
+
+.paired-with
+-> dev/dev-workflow
