@@ -1,4 +1,4 @@
-# electric sheep pen
+# Electric Sheep Pen
 
 > **Alpha** — rough edges expected. Feedback welcome.
 
@@ -6,19 +6,16 @@ A codebase-local memory graph for AI coding agents. Plain-text `.eshp` files
 live in an `eshp/` folder alongside your code. A SQLite graph store backs them
 for fast querying. Everything commits to git.
 
+Inspired by the A-mem paper (kind of).
+
 ---
 
 ## Why does this exist?
 
-AI coding agents are fast but amnesiac. Every session starts cold — no memory
-of past decisions, architecture rationale, or project conventions.
-
-Electric sheep pen gives agents a persistent, structured, project-specific
-memory that survives session boundaries. Notes capture not just *what* the
-code does but *why* — the decisions, traps, and context that matter most.
-
-Inspired by the [A-MEM paper](https://arxiv.org/abs/2502.12110) — memories as
-interconnected notes with tags, free text, and typed relationships.
+- Keep long term project memory out of proprietary coding agents and in git
+- Provide persistent, structured memory across session boundaries or tool changes
+- More easily read and reason about WTF the agent did
+- Save on tokens and time by using the graph to warm-start context for coding sessions
 
 ---
 
