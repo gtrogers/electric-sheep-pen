@@ -4,10 +4,14 @@
 
 eshp_store.py — SQLite-backed graph store.
 
-Three tables:
+Five tables:
   notes(slug PK, desc, body, updated_at)
   tags(slug, tag)                    -- # stripped at parse time
   edges(src, rel, dst)               -- directed: src -[rel]-> dst
+  decl_outgoing(declaring_slug, rel, target_slug)  -- tracks -> declarations
+  decl_incoming(declaring_slug, rel, source_slug)  -- tracks <- declarations
+The decl_* tables enable correct edge ownership: upsert_note(X) re-applies
+other notes' decl_incoming WHERE source_slug=X so <- edges survive X's resync.
 
 Key methods:
   sync(verbose)        — full scan of eshp/ dir, upserts all notes, removes stale

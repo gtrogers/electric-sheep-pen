@@ -47,13 +47,10 @@ delete_note(X):
   persists until BOTH drop it (step 7 checks decl_outgoing before pruning)
 - sync() order-independent: result is the same regardless of which note is processed last
 
-## Tests added (TestIncomingDeclPersistence)
+## Tests
 
-- test_incoming_edge_survives_source_resync
-- test_incoming_edge_removed_when_declarer_deleted
-- test_incoming_edge_removed_when_declarer_drops_it
-- test_dual_declaration_persists_until_both_drop
-- test_sync_order_independent
+5 tests in TestIncomingDeclPersistence cover: source resync, declarer deletion,
+declarer dropping the edge, dual-declaration, and sync-order independence.
 
 .related
 -> store
