@@ -18,7 +18,10 @@ Key methods:
   recall(slug, n)      — full note + N direct neighbours with complete body content
   get_note(slug)       — returns note + edges_out + edges_in
   get_descs(slugs)     — returns {slug: desc} for bulk lookups (used by CLI)
-  neighbours(slug, rel, depth) — BFS over edge table
+  neighbours(slug, rel, depth) — bidirectional BFS over edge table (still present; graph CLI now uses subgraph instead)
+  subgraph(slug, rels=None, depth=3, direction='both') — directed BFS; used by graph CLI
+    direction: 'forward' (src IN frontier), 'backward' (dst IN frontier), 'both'
+    returns [{src, rel, dst, hop, traversal_dir}]
   list_by_tag(tag) / all_tags() / all_rels() / stats()
   all_edges(rel)       — all (src, rel, dst) triples; optional rel filter
   record_recall(slug)  — updates last_recalled_at; auto-commits (fire-and-forget)

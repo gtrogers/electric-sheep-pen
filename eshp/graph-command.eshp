@@ -36,7 +36,9 @@ Store method:
     forward  → SQL WHERE src IN (frontier)
     backward → SQL WHERE dst IN (frontier)
     both     → SQL WHERE src IN (frontier) OR dst IN (frontier)
+  Note: store default depth=3; CLI graph command default depth=1.
 
 .related
 -> cli
 -> store
+<- related rels-edges-commands
