@@ -22,9 +22,15 @@ Thread safety:
   Each request handler opens a fresh sqlite3.connect(check_same_thread=False).
   Do NOT share the write-side EshpStore with request handlers.
 
-make_server(eshp_root: Path, host, port) → HTTPServer
+make_server(eshp_root: Path, host, port) → ThreadingHTTPServer
   Sets server.db_path = eshp_root / ".eshp.db" on the server instance.
   Does not start serving — call serve_forever() in a daemon thread.
+
+TRAP — MUST use ThreadingHTTPServer (not HTTPServer):
+  The SSE /events handler runs an infinite poll loop for the duration of the
+  browser session. HTTPServer is single-threaded: once /events is accepted, the
+  entire server is blocked — no further requests (including /api/note/<slug>)
+  can be served. ThreadingHTTPServer gives each connection its own thread.
 
 Static files live in eshp/static/ relative to eshp_server.py:
   index.html        — SPA with cytoscape + SSE listener

@@ -2,7 +2,23 @@
 
 > Web view feature for the eshp memory graph — BUILT. Run with `eshp serve`.
 
-## Summary
+## Traps found during implementation
+
+TRAP — ThreadingHTTPServer required (see server note for detail):
+  HTTPServer is single-threaded. SSE blocks it entirely. Use ThreadingHTTPServer.
+
+TRAP — Cytoscape canvas overflow covers side panel:
+  Cytoscape initialises its canvas to the container's pixel size at creation time.
+  When the flexbox layout shifts (e.g. panel opens), the canvas stays full-width
+  and overflows the container, visually covering the side panel.
+  Fix: `overflow: hidden` on `#cy` + a `ResizeObserver` calling `cy.resize()` when
+  the container changes size. Do NOT use requestAnimationFrame — layout hasn't
+  updated yet when it fires.
+
+TRAP — record_recall must be called from every discovery command:
+  SSE recall highlights only fire when record_recall() is called. Initially only
+  `eshp recall` called it; `eshp scan` did not, so scan activity was invisible
+  in the web view. Both commands now call record_recall for each result.
 
 HIGH feasibility. All three main sub-problems (graph API, interactive browsing,
 live SSE activity) are solvable without adding any mandatory new dependencies.
