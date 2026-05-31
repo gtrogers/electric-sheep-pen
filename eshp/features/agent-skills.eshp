@@ -1,4 +1,4 @@
-#cli #spec #workflow
+#cli #spec #workflow #skill
 > Agent skill templates bundled with eshp for AI-assisted workflows.
 
 Four skill templates ship with eshp in the skills/ directory:
@@ -32,3 +32,6 @@ When templates are updated, re-run init-skills to propagate changes.
 
 .implemented-in
 -> modules/cli
+
+.uses
+-> commands/recall-semantics
