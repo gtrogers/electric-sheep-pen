@@ -10,6 +10,13 @@ Use tmp_path for file isolation. store + memo_dir fixtures in test_store.py are 
 
 Self-hosting — use eshp itself during development to record decisions and context.
 The eshp/ folder in this repo IS the project memory graph.
+Memory graph directory layout:
+  eshp/modules/   — code module notes (architecture, parser, store, cli, server)
+  eshp/design/    — design decisions, format specs, key concepts
+  eshp/dev/       — developer lifecycle (conventions, workflow)
+  eshp/features/  — user-facing features (web-view, agent-skills, etc.)
+  eshp/commands/  — CLI command specs (recall-semantics, graph-command, etc.)
+  eshp/bugs/      — bugs (fixed or open)
 
 Commit convention — EshpStore does not auto-commit.
 Always call store.conn.commit() after mutations.

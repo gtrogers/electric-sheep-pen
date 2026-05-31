@@ -29,5 +29,5 @@ Three modules with a clean layered design:
 - **Commit after mutations**: `EshpStore` does not auto-commit. Always call `store.conn.commit()` after `upsert_note()` / `delete_note()` in tests and production code.
 - **Resource cleanup**: always call `store.close()` when done with an `EshpStore` instance.
 - **Test structure**: tests are grouped into classes by method/feature (e.g. `TestParseTags`, `TestUpsertNote`). Use `tmp_path` for file isolation; the `store` and `memo_dir` fixtures in `test_store.py` are the canonical pattern for store tests.
-- **Slugs**: kebab-case filenames without the `.eshp` extension. `path.stem` is used everywhere to derive them.
+- **Slugs**: root-relative POSIX paths without the `.eshp` extension. Top-level notes use a plain stem (e.g. `store`); notes in subdirectories use a path-slug (e.g. `modules/cli` for `eshp/modules/cli.eshp`). `parse_eshp(path, root=self.root)` derives this. Relationship targets must always use the full path-slug — `-> auth` will NOT resolve `concepts/auth.eshp`.
 - **Tags**: stored without the `#` prefix in the DB and in `EshpNote.tags`; the `#` is only present in the raw file and stripped at parse time.
