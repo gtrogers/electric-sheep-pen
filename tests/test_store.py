@@ -1049,6 +1049,71 @@ class TestDiagnose:
         assert result["bare_notes"] == []
         assert result["tagless_notes"] == []
         assert result["stub_notes"] == []
+        assert result["redundant_rel_pairs"] == []
+
+    def test_redundant_rel_pair_detected(self, store, memo_dir):
+        """manages/managed-by that are always mirrored (2 pairs) → flagged."""
+        from eshp_parser import Relationship
+
+        for slug, target, outgoing_rel, incoming_rel in [
+            ("alice", "bob",   "manages",    "managed-by"),
+            ("carol", "diana", "manages",    "managed-by"),
+        ]:
+            make_note(memo_dir, slug, tags=("t",), desc=f"{slug}.",
+                      rels={outgoing_rel: Relationship(outgoing_rel, outgoing=[target], incoming=[])})
+        make_note(memo_dir, "bob",   tags=("t",), desc="bob.",
+                  rels={"managed-by": Relationship("managed-by", outgoing=["alice"], incoming=[])})
+        make_note(memo_dir, "diana", tags=("t",), desc="diana.",
+                  rels={"managed-by": Relationship("managed-by", outgoing=["carol"], incoming=[])})
+        store.sync()
+        result = store.diagnose()
+        pairs = result["redundant_rel_pairs"]
+        assert len(pairs) == 1
+        assert pairs[0]["rel_a"] == "managed-by"
+        assert pairs[0]["rel_b"] == "manages"
+        assert pairs[0]["count"] == 2
+
+    def test_redundant_rel_pair_single_edge_not_flagged(self, store, memo_dir):
+        """A single mirrored edge pair does not meet the minimum threshold."""
+        from eshp_parser import Relationship
+        make_note(memo_dir, "x", tags=("t",), desc="x.",
+                  rels={"requires": Relationship("requires", outgoing=["y"], incoming=[])})
+        make_note(memo_dir, "y", tags=("t",), desc="y.",
+                  rels={"required-by": Relationship("required-by", outgoing=["x"], incoming=[])})
+        store.sync()
+        result = store.diagnose()
+        assert result["redundant_rel_pairs"] == []
+
+    def test_redundant_rel_pair_partial_overlap_not_flagged(self, store, memo_dir):
+        """rel_a has 2 edges but only 1 mirrors rel_b → not flagged."""
+        from eshp_parser import Relationship
+        make_note(memo_dir, "a", tags=("t",), desc="a.",
+                  rels={"rel-a": Relationship("rel-a", outgoing=["b", "c"], incoming=[])})
+        make_note(memo_dir, "b", tags=("t",), desc="b.",
+                  rels={"rel-b": Relationship("rel-b", outgoing=["a"], incoming=[])})
+        make_note(memo_dir, "c", tags=("t",), desc="c.")
+        store.sync()
+        result = store.diagnose()
+        assert result["redundant_rel_pairs"] == []
+
+    def test_redundant_rel_pair_result_is_sorted(self, store, memo_dir):
+        """Result list is sorted by (rel_a, rel_b) for deterministic output."""
+        from eshp_parser import Relationship
+
+        def mirror_pair(src_slugs, dst_slugs, rel_fwd, rel_rev):
+            for s, d in zip(src_slugs, dst_slugs):
+                make_note(memo_dir, s, tags=("t",), desc=f"{s}.",
+                          rels={rel_fwd: Relationship(rel_fwd, outgoing=[d], incoming=[])})
+                make_note(memo_dir, d, tags=("t",), desc=f"{d}.",
+                          rels={rel_rev: Relationship(rel_rev, outgoing=[s], incoming=[])})
+
+        mirror_pair(["p1", "p2"], ["q1", "q2"], "uses",    "used-by")
+        mirror_pair(["r1", "r2"], ["s1", "s2"], "manages", "managed-by")
+        store.sync()
+        result = store.diagnose()
+        pairs = result["redundant_rel_pairs"]
+        assert len(pairs) == 2
+        assert pairs[0]["rel_a"] < pairs[1]["rel_a"]
 
 
 # ──────────────────────────────────────────────────────── incoming decl persistence

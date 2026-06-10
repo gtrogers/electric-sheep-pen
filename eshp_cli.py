@@ -760,6 +760,17 @@ def diagnose(root, verbose):
         data["stub_notes"],
         lambda s: click.style(s, fg="cyan") + "  — fill in or delete",
     )
+    _section(
+        "redundant rel pairs",
+        data["redundant_rel_pairs"],
+        lambda p: (
+            click.style(p["rel_a"], fg="cyan")
+            + "  <->  "
+            + click.style(p["rel_b"], fg="cyan")
+            + click.style(f"  ({p['count']} pairs)", fg="white", dim=True)
+            + "  — possible redundant inverse pair; consider standardising on one direction"
+        ),
+    )
 
     if issue_count == 0:
         click.echo(click.style("✓  graph looks healthy", fg="green", bold=True))

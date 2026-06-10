@@ -32,6 +32,13 @@ tagless notes  (no tags)
 stub notes  (no body AND no desc)
   Completely empty notes — likely created but never filled in.
 
+redundant rel pairs  (≥2 mirrored edge pairs)
+  Pairs of relationship types that are always exact inverses of each other,
+  e.g. every "manages" edge has a matching "managed-by" edge and vice versa.
+  These redundant two-way relationships add noise without adding information.
+  Pick one direction and delete all edges of the other type.
+  Requires ≥2 pairs to avoid false positives on coincidental single mirrors.
+
 ## Output format
 
 Structured CLI output: one section per check category. Healthy checks are

@@ -251,3 +251,50 @@ class TestGraphCommand:
         d = self._make_store(tmp_path)
         result = runner.invoke(cli, ["graph", "grandchild", "--direction", "backward", "--depth", "1", "--root", str(d)])
         assert "◀" in result.output
+
+
+# ──────────────────────────────────────────────────────── diagnose
+
+class TestDiagnoseCommand:
+    def _make_store(self, tmp_path, with_redundant_pair: bool = False):
+        """Create a minimal eshp dir. If with_redundant_pair, seed a mirrored pair."""
+        from eshp_parser import EshpNote, Relationship, render_eshp
+        from eshp_store import EshpStore
+
+        d = tmp_path / "eshp"
+        d.mkdir()
+
+        def write(slug, tags, desc, body="Body.", rels=None):
+            note = EshpNote(path=d / f"{slug}.eshp", slug=slug, tags=list(tags),
+                            desc=desc, body=body, relationships=rels or {})
+            (d / f"{slug}.eshp").write_text(render_eshp(note), encoding="utf-8")
+
+        write("a", ["t"], "Note A.")
+        write("b", ["t"], "Note B.")
+
+        if with_redundant_pair:
+            write("c", ["t"], "Note C.",
+                  rels={"manages": Relationship("manages", outgoing=["d", "e"], incoming=[])})
+            write("d", ["t"], "Note D.",
+                  rels={"managed-by": Relationship("managed-by", outgoing=["c"], incoming=[])})
+            write("e", ["t"], "Note E.",
+                  rels={"managed-by": Relationship("managed-by", outgoing=["c"], incoming=[])})
+
+        store = EshpStore(d)
+        store.sync()
+        store.close()
+        return d
+
+    def test_healthy_graph_no_redundant_section(self, runner, tmp_path):
+        d = self._make_store(tmp_path, with_redundant_pair=False)
+        result = runner.invoke(cli, ["diagnose", "--root", str(d)])
+        assert result.exit_code == 0
+        assert "redundant" not in result.output
+
+    def test_redundant_pair_shown_in_output(self, runner, tmp_path):
+        d = self._make_store(tmp_path, with_redundant_pair=True)
+        result = runner.invoke(cli, ["diagnose", "--root", str(d)])
+        assert result.exit_code == 0
+        assert "redundant rel pairs" in result.output
+        assert "managed-by" in result.output
+        assert "manages" in result.output

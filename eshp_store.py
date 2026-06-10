@@ -431,9 +431,11 @@ class EshpStore:
           bloated_notes   — [{slug, chars, lines}, ...] body > bloated_chars
           hub_nodes       — [{slug, degree, mean_degree}, ...] degree > mean*hub_factor
           dangling_edges  — [{src, rel, dst}, ...] edges with missing src/dst
-          bare_notes      — [slug, ...] notes with no desc
-          tagless_notes   — [slug, ...] notes with no tags
-          stub_notes      — [slug, ...] notes with no body and no desc
+          bare_notes           — [slug, ...] notes with no desc
+          tagless_notes        — [slug, ...] notes with no tags
+          stub_notes           — [slug, ...] notes with no body and no desc
+          redundant_rel_pairs  — [{rel_a, rel_b, count, examples}, ...] rel types
+                                  that are always exact mirrors of each other (≥2 pairs)
         """
         # ── Degree map ────────────────────────────────────────────────────────
         degrees: dict[str, int] = {}
@@ -495,6 +497,34 @@ class EshpStore:
             if r["src"] not in all_slugs or r["dst"] not in all_slugs
         ]
 
+        # ── Redundant two-way rel pairs ───────────────────────────────────────
+        # Flag pairs (rel_a, rel_b) where every edge of one is the exact mirror
+        # of the other — e.g. "manages"/"managed-by". Requires ≥2 pairs to
+        # avoid false positives on coincidental single-edge mirrors.
+        by_rel: dict[str, set[tuple[str, str]]] = {}
+        for r in self.conn.execute("SELECT src, rel, dst FROM edges"):
+            by_rel.setdefault(r["rel"], set()).add((r["src"], r["dst"]))
+
+        redundant_pairs: list[dict] = []
+        rel_names = sorted(by_rel.keys())
+        for i, rel_a in enumerate(rel_names):
+            for rel_b in rel_names[i + 1:]:
+                edges_a = by_rel[rel_a]
+                edges_b = by_rel[rel_b]
+                if len(edges_a) < 2:
+                    continue
+                if edges_a == {(dst, src) for src, dst in edges_b}:
+                    examples = [
+                        {"src": src, "dst": dst}
+                        for src, dst in sorted(edges_a)[:2]
+                    ]
+                    redundant_pairs.append({
+                        "rel_a": rel_a,
+                        "rel_b": rel_b,
+                        "count": len(edges_a),
+                        "examples": examples,
+                    })
+
         return {
             "stats": {"notes": len(degrees), "edges": self.stats()["edges"]},
             "orphaned_nodes": sorted(orphaned),
@@ -504,6 +534,7 @@ class EshpStore:
             "bare_notes": bare,
             "tagless_notes": tagless,
             "stub_notes": stubs,
+            "redundant_rel_pairs": sorted(redundant_pairs, key=lambda x: (x["rel_a"], x["rel_b"])),
         }
 
 
