@@ -20,6 +20,7 @@ Ensure the git state is clean so we can commit the updated memory files.
 
 Understand the current memory graph
 
+- `eshp diagnose` - get high level graph diagnostics
 - `eshp rels` - list all relationships
 - `eshp tags` - list all tags
 - `eshp summarise` - list recently created and recalled memories
@@ -55,3 +56,5 @@ Improve relationships
 - General rule: do not use generic relationships if a more specific relationship
   would provide more meaning. Replace generic relationship names with specific
   ones as the graph grows and meaning becomes apparent.
+- Remove redundant two-way nodes e.g. 'loads' and 'loaded-by' communicate the
+  same thing. Pick one to consolidate on.
