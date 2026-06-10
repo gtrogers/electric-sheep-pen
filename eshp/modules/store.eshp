@@ -30,6 +30,9 @@ Key methods:
   all_edges(rel)       — all (src, rel, dst) triples; optional rel filter
   record_recall(slug)  — updates last_recalled_at; auto-commits (fire-and-forget)
   summarise(top_n)     — dict: stats, top_tags, top_rels, recent_notes, recent_recalls
+  diagnose(...)        — graph health checks; returns dict with orphaned_nodes, bloated_notes,
+                         hub_nodes, dangling_edges, bare_notes, tagless_notes, stub_notes,
+                         redundant_rel_pairs (see commands/diagnose-command)
 
 IMPORTANT: EshpStore does NOT auto-commit. Always call store.conn.commit()
 after upsert_note() / delete_note() in tests and production code.
