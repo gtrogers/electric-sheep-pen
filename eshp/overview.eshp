@@ -1,0 +1,36 @@
+# overview
+
+> A codebase-local memory graph for AI coding agents.
+
+eshp stores long-term project knowledge as plain-text `.eshp` files in an `eshp/`
+folder alongside your code. A SQLite graph backs them for fast querying. Everything
+commits to git.
+
+## Why it exists
+
+Coding agents lose context at session boundaries. Project knowledge gets buried in
+chat history or locked inside proprietary tools. eshp solves this by keeping memory
+in your repo — version-controlled, readable, and tool-agnostic.
+
+Core goals:
+- Keep long-term project memory in git, not in proprietary agents
+- Persist structured knowledge across session boundaries and tool changes
+- Make agent decisions readable and auditable (see what was recalled and scanned)
+- Warm-start coding sessions with compact graph-structured context instead of
+  re-explaining the codebase from scratch each time
+
+## Who it's for
+
+Any developer using AI coding agents on a codebase longer than a single session —
+especially when switching between agents or resuming work after a break.
+
+## Inspiration
+
+Loosely inspired by the A-mem paper on agent memory architectures.
+
+#overview #project
+
+.references
+-> modules/architecture
+-> features/agent-skills
+-> dev/release

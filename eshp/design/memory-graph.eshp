@@ -1,0 +1,47 @@
+# design/memory-graph
+
+> The core abstraction: a graph of typed, interconnected notes stored as plain text.
+
+A memory graph is a set of nodes (notes) connected by typed edges (relationships).
+Each note is a plain-text `.eshp` file with a title, description, free-form body,
+tags, and a `.rels` block declaring named relationships to other notes.
+
+The graph is backed by SQLite for fast querying (FTS, BFS traversal, tag filtering)
+but the source of truth is always the `.eshp` files — the DB is regenerated on demand.
+
+## Why a graph, not a flat list?
+
+Context is relational. "This bug was fixed in this PR which changed this module
+which depends-on this other module" — flat docs can't express that chain.
+Typed edges let agents traverse relevant context efficiently without loading
+everything.
+
+## Why plain text + git?
+
+- Human-readable and diffable — agents and humans can both edit notes
+- No proprietary lock-in — swap agents without losing memory
+- Version-controlled history — see how understanding of the codebase evolved
+- Works offline, no external services
+
+## Why SQLite?
+
+- Enables FTS, BFS traversal, and tag-based filtering in a single process
+- Zero-dependency for querying (no server, no network)
+- DB is gitignored and regenerated from `.eshp` files via `eshp watch` or `eshp sync`
+
+## Key concepts
+
+- **slug**: root-relative POSIX path without `.eshp` extension (e.g. `modules/cli`)
+- **tags**: `#word` prefixes in the file; stored without `#` in DB; used for grouping
+- **edge direction**: `<-` in file = forward edge in DB (source points to this note)
+- **scan vs recall**: `eshp scan` = broad FTS discovery; `eshp recall` = focused load
+
+#design #concept
+
+.part-of
+<- overview
+
+.describes
+-> design/file-format
+-> design/edge-direction
+-> commands/recall-semantics

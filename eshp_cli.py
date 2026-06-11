@@ -529,7 +529,7 @@ def scan(query, limit, root):
     store = get_store(Path(root) if root else None)
     results = store.scan(query, limit=limit)
     for r in results:
-        store.record_recall(r["slug"])
+        store.record_scan(r["slug"])
     store.close()
 
     if not results:

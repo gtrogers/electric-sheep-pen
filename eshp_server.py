@@ -140,26 +140,31 @@ class EshpRequestHandler(BaseHTTPRequestHandler):
         self.end_headers()
 
         conn = self._open_db()
-        last_seen: dict[str, str] = {}
+        # Key: (slug, type) so scan and recall events are tracked independently.
+        last_seen: dict[tuple[str, str], str] = {}
+
+        _ACTIVITY_SQL = """
+            SELECT slug, last_recalled_at AS ts, 'recall' AS type
+              FROM notes WHERE last_recalled_at IS NOT NULL
+            UNION ALL
+            SELECT slug, last_scanned_at  AS ts, 'scan'   AS type
+              FROM notes WHERE last_scanned_at IS NOT NULL
+            ORDER BY ts DESC, slug, type
+            LIMIT 40
+        """
 
         try:
             # Seed last_seen so we don't replay old events on connect
-            for row in conn.execute(
-                "SELECT slug, last_recalled_at FROM notes WHERE last_recalled_at IS NOT NULL"
-            ):
-                last_seen[row["slug"]] = row["last_recalled_at"]
+            for row in conn.execute(_ACTIVITY_SQL):
+                last_seen[(row["slug"], row["type"])] = row["ts"]
 
             while True:
-                for row in conn.execute(
-                    "SELECT slug, last_recalled_at FROM notes "
-                    "WHERE last_recalled_at IS NOT NULL "
-                    "ORDER BY last_recalled_at DESC LIMIT 20"
-                ):
-                    slug = row["slug"]
-                    ts = row["last_recalled_at"]
-                    if last_seen.get(slug) != ts:
-                        last_seen[slug] = ts
-                        payload = json.dumps({"slug": slug, "type": "recall"})
+                for row in conn.execute(_ACTIVITY_SQL):
+                    key = (row["slug"], row["type"])
+                    ts = row["ts"]
+                    if last_seen.get(key) != ts:
+                        last_seen[key] = ts
+                        payload = json.dumps({"slug": row["slug"], "type": row["type"]})
                         self.wfile.write(f"data: {payload}\n\n".encode())
                         self.wfile.flush()
                 time.sleep(0.5)

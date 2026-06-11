@@ -6,6 +6,7 @@ import pytest
 from click.testing import CliRunner
 
 from eshp_cli import cli, _skills_templates_dir
+from eshp_store import EshpStore
 
 
 # ──────────────────────────────────────────────────────── helpers
@@ -298,3 +299,44 @@ class TestDiagnoseCommand:
         assert "redundant rel pairs" in result.output
         assert "managed-by" in result.output
         assert "manages" in result.output
+
+
+# ──────────────────────────────────────────────────── scan / recall wiring
+
+class TestScanRecallWiring:
+    """eshp scan writes last_scanned_at; eshp recall writes last_recalled_at."""
+
+    def _make_store(self, tmp_path):
+        d = tmp_path / "eshp"
+        d.mkdir()
+        (d / "alpha.eshp").write_text("# alpha\n\nA note.\n")
+        store = EshpStore(d)
+        store.sync()
+        store.close()
+        return d
+
+    def test_scan_updates_last_scanned_at_only(self, runner, tmp_path):
+        d = self._make_store(tmp_path)
+        result = runner.invoke(cli, ["scan", "--root", str(d), "alpha"])
+        assert result.exit_code == 0
+
+        store = EshpStore(d)
+        row = store.conn.execute(
+            "SELECT last_scanned_at, last_recalled_at FROM notes WHERE slug='alpha'"
+        ).fetchone()
+        store.close()
+        assert row["last_scanned_at"] is not None
+        assert row["last_recalled_at"] is None
+
+    def test_recall_updates_last_recalled_at_only(self, runner, tmp_path):
+        d = self._make_store(tmp_path)
+        result = runner.invoke(cli, ["recall", "--root", str(d), "alpha"])
+        assert result.exit_code == 0
+
+        store = EshpStore(d)
+        row = store.conn.execute(
+            "SELECT last_scanned_at, last_recalled_at FROM notes WHERE slug='alpha'"
+        ).fetchone()
+        store.close()
+        assert row["last_recalled_at"] is not None
+        assert row["last_scanned_at"] is None

@@ -721,6 +721,79 @@ class TestRecordRecall:
         ).fetchone()
         assert row["last_recalled_at"] is None
 
+    def test_does_not_affect_last_scanned_at(self, store, memo_dir):
+        make_note(memo_dir, "alpha")
+        store.sync()
+        store.record_recall("alpha")
+        row = store.conn.execute(
+            "SELECT last_scanned_at FROM notes WHERE slug='alpha'"
+        ).fetchone()
+        assert row["last_scanned_at"] is None
+
+
+class TestRecordScan:
+    def test_sets_last_scanned_at(self, store, memo_dir):
+        make_note(memo_dir, "alpha")
+        store.sync()
+
+        row = store.conn.execute(
+            "SELECT last_scanned_at FROM notes WHERE slug='alpha'"
+        ).fetchone()
+        assert row["last_scanned_at"] is None
+
+        store.record_scan("alpha")
+
+        row = store.conn.execute(
+            "SELECT last_scanned_at FROM notes WHERE slug='alpha'"
+        ).fetchone()
+        assert row["last_scanned_at"] is not None
+
+    def test_does_not_affect_last_recalled_at(self, store, memo_dir):
+        make_note(memo_dir, "alpha")
+        store.sync()
+        store.record_scan("alpha")
+        row = store.conn.execute(
+            "SELECT last_recalled_at FROM notes WHERE slug='alpha'"
+        ).fetchone()
+        assert row["last_recalled_at"] is None
+
+    def test_works_on_pre_migration_db(self, tmp_path):
+        """A DB opened without last_scanned_at gets the column via migration."""
+        import sqlite3
+        db_path = tmp_path / "eshp" / ".eshp.db"
+        db_path.parent.mkdir()
+        # Simulate old DB without last_scanned_at
+        conn = sqlite3.connect(str(db_path))
+        conn.execute(
+            "CREATE TABLE notes "
+            "(slug TEXT PRIMARY KEY, desc TEXT DEFAULT '', body TEXT DEFAULT '', "
+            "updated_at TEXT, last_recalled_at TEXT DEFAULT NULL)"
+        )
+        conn.execute("INSERT INTO notes (slug) VALUES ('alpha')")
+        conn.execute("CREATE TABLE tags (slug TEXT, tag TEXT)")
+        conn.execute(
+            "CREATE TABLE edges (src TEXT, rel TEXT, dst TEXT, "
+            "PRIMARY KEY(src, rel, dst))"
+        )
+        conn.execute(
+            "CREATE TABLE decl_outgoing "
+            "(declaring_slug TEXT, rel TEXT, target_slug TEXT)"
+        )
+        conn.execute(
+            "CREATE TABLE decl_incoming "
+            "(declaring_slug TEXT, rel TEXT, source_slug TEXT)"
+        )
+        conn.commit()
+        conn.close()
+
+        s = EshpStore(db_path.parent)
+        s.record_scan("alpha")
+        row = s.conn.execute(
+            "SELECT last_scanned_at FROM notes WHERE slug='alpha'"
+        ).fetchone()
+        assert row["last_scanned_at"] is not None
+        s.close()
+
 
 class TestSummarise:
     def test_returns_stats(self, store, memo_dir):

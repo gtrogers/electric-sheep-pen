@@ -82,6 +82,11 @@ class EshpStore:
             self.conn.execute("ALTER TABLE notes ADD COLUMN last_recalled_at TEXT DEFAULT NULL")
         except Exception:
             pass
+        # Migrate existing DBs that predate the last_scanned_at column
+        try:
+            self.conn.execute("ALTER TABLE notes ADD COLUMN last_scanned_at TEXT DEFAULT NULL")
+        except Exception:
+            pass
         self.conn.commit()
 
     # ------------------------------------------------------------------ sync
@@ -382,6 +387,13 @@ class EshpStore:
         """Record that a note was recalled (updates last_recalled_at). Auto-commits."""
         self.conn.execute(
             "UPDATE notes SET last_recalled_at = datetime('now') WHERE slug = ?", (slug,)
+        )
+        self.conn.commit()
+
+    def record_scan(self, slug: str) -> None:
+        """Record that a note was returned by a scan (updates last_scanned_at). Auto-commits."""
+        self.conn.execute(
+            "UPDATE notes SET last_scanned_at = datetime('now') WHERE slug = ?", (slug,)
         )
         self.conn.commit()
 

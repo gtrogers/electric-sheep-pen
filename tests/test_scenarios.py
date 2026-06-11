@@ -341,3 +341,70 @@ class TestSSERecall:
         event = received.get(timeout=5)
         assert event["slug"] == "alpha"
         assert event["type"] == "recall"
+
+    def test_sse_delivers_scan_event(self, sse_server):
+        base, store = sse_server
+        received: queue.Queue = queue.Queue()
+
+        def _listen():
+            req = urllib.request.Request(base + "/events")
+            try:
+                with urllib.request.urlopen(req, timeout=10) as resp:
+                    for raw_line in resp:
+                        line = raw_line.decode().strip()
+                        if line.startswith("data:"):
+                            payload = json.loads(line[len("data:"):].strip())
+                            received.put(payload)
+                            return
+            except Exception:
+                pass
+
+        listener = threading.Thread(target=_listen, daemon=True)
+        listener.start()
+
+        time.sleep(1.0)
+
+        store.record_scan("alpha")
+        store.conn.commit()
+
+        event = received.get(timeout=5)
+        assert event["slug"] == "alpha"
+        assert event["type"] == "scan"
+
+    def test_sse_delivers_scan_and_recall_independently(self, sse_server):
+        """Scan and recall fire as separate events even for the same slug."""
+        base, store = sse_server
+        received: queue.Queue = queue.Queue()
+
+        def _listen():
+            req = urllib.request.Request(base + "/events")
+            try:
+                with urllib.request.urlopen(req, timeout=10) as resp:
+                    for raw_line in resp:
+                        line = raw_line.decode().strip()
+                        if line.startswith("data:"):
+                            payload = json.loads(line[len("data:"):].strip())
+                            received.put(payload)
+                            if received.qsize() >= 2:
+                                return
+            except Exception:
+                pass
+
+        listener = threading.Thread(target=_listen, daemon=True)
+        listener.start()
+
+        time.sleep(1.0)
+
+        store.record_scan("alpha")
+        store.conn.commit()
+        time.sleep(0.6)
+        store.record_recall("alpha")
+        store.conn.commit()
+
+        events = []
+        for _ in range(2):
+            events.append(received.get(timeout=5))
+
+        types = {e["type"] for e in events}
+        assert types == {"scan", "recall"}
+        assert all(e["slug"] == "alpha" for e in events)

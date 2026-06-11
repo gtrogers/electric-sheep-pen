@@ -145,6 +145,12 @@
       50%  { background-color: #ff8c00; border-color: #ff6600; }
       100% { background-color: #f4d03f; border-color: #f39c12; }
     }
+
+    @keyframes scan-pulse {
+      0%   { background-color: #56d3e6; border-color: #20b8c8; }
+      50%  { background-color: #29b6d0; border-color: #0e9aaf; }
+      100% { background-color: #56d3e6; border-color: #20b8c8; }
+    }
   </style>
 </head>
 <body>
@@ -280,6 +286,16 @@
               'transition-property': 'background-color, border-color, border-width',
               'transition-duration': '0.2s',
             }
+          },
+          {
+            selector: '.scanned',
+            style: {
+              'background-color': '#56d3e6',
+              'border-color': '#20b8c8',
+              'border-width': 4,
+              'transition-property': 'background-color, border-color, border-width',
+              'transition-duration': '0.2s',
+            }
           }
         ],
         layout: {
@@ -374,19 +390,25 @@
 
     document.getElementById('panel-close').onclick = closePanel;
 
-    // ── SSE recall events ────────────────────────────────────────────────────
+    // ── SSE activity events (recall + scan) ─────────────────────────────────
 
     function connectSSE() {
       const source = new EventSource('/events');
 
       source.onmessage = e => {
         const data = JSON.parse(e.data);
-        if (data.type === 'recall' && cy) {
-          const node = cy.getElementById(data.slug);
-          if (node && node.length) {
-            node.addClass('recalled');
-            setTimeout(() => node.removeClass('recalled'), 2000);
-          }
+        if (!cy) return;
+        const node = cy.getElementById(data.slug);
+        if (!node || !node.length) return;
+
+        if (data.type === 'recall') {
+          node.removeClass('scanned');
+          node.addClass('recalled');
+          setTimeout(() => node.removeClass('recalled'), 2000);
+        } else if (data.type === 'scan') {
+          node.removeClass('recalled');
+          node.addClass('scanned');
+          setTimeout(() => node.removeClass('scanned'), 1500);
         }
       };
 
