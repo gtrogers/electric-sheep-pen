@@ -12,9 +12,17 @@ TRAP — Cytoscape canvas overflow covers side panel:
   shifts and the canvas overflows. Fix: `overflow: hidden` on `#cy` + ResizeObserver
   calling `cy.resize()`. Do NOT use requestAnimationFrame — layout hasn't settled yet.
 
-TRAP — record_recall must be called from every discovery command:
-  SSE recall highlights only fire when record_recall() is called. Both `eshp recall`
-  and `eshp scan` must call it; forgetting scan makes scan activity invisible.
+TRAP — record_recall / record_scan must be called from every discovery command:
+  SSE highlights only fire when record_recall() or record_scan() is called.
+  `eshp recall` calls record_recall(); `eshp scan` calls record_scan().
+  Forgetting either makes that command's activity invisible in the graph view.
+
+SSE event types:
+  recall — node pulses amber (2s), triggered by `eshp recall`
+  scan   — node pulses teal (1.5s), triggered by `eshp scan`
+  Both types can fire for the same slug independently (keyed by (slug, type)).
+  The SSE handler removes the conflicting class before adding the new one to
+  prevent visual conflicts (recalled → remove .scanned; scanned → remove .recalled).
 
 TRAP — CiSE layout not viable:
   cytoscape-cise 2.x requires cose-base and avsdf-base as external peer deps —

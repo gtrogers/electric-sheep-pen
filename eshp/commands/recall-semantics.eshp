@@ -31,9 +31,12 @@ Store methods:
   store.scan(query, limit=20)  → list[{slug, desc, tags, body_preview, edge_count, score}]
   store.recall(slug, n=5)      → {note: full_note_dict, related: [full_note_dicts]} | None
 
-SHARP EDGE: recall() updates last_recalled_at in the DB (via record_recall).
-This metadata is DB-only (.eshp.db, gitignored). The eshp summarise command
-surfaces recently recalled slugs — useful for agents to see what was recently in focus.
+SHARP EDGE: Both commands update activity timestamps in the DB (.eshp.db, gitignored):
+  recall() → updates last_recalled_at (via record_recall)
+  scan()   → updates last_scanned_at  (via record_scan)
+These timestamps drive the SSE activity stream — the web view highlights nodes
+in amber (recall) or teal (scan) as commands run.
+`eshp summarise` surfaces recently recalled slugs — useful for agents to see focus.
 
 .implemented-in
 -> modules/cli

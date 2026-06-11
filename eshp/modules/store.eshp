@@ -5,7 +5,7 @@
 eshp_store.py — SQLite-backed graph store.
 
 Five tables:
-  notes(slug PK, desc, body, updated_at)
+  notes(slug PK, desc, body, updated_at, last_recalled_at, last_scanned_at)
   tags(slug, tag)                    -- # stripped at parse time
   edges(src, rel, dst)               -- directed: src -[rel]-> dst
   decl_outgoing(declaring_slug, rel, target_slug)  -- tracks -> declarations
@@ -29,6 +29,7 @@ Key methods:
   list_by_tag(tag) / all_tags() / all_rels() / stats()
   all_edges(rel)       — all (src, rel, dst) triples; optional rel filter
   record_recall(slug)  — updates last_recalled_at; auto-commits (fire-and-forget)
+  record_scan(slug)    — updates last_scanned_at; auto-commits (fire-and-forget)
   summarise(top_n)     — dict: stats, top_tags, top_rels, recent_notes, recent_recalls
   diagnose(...)        — graph health checks; returns dict with orphaned_nodes, bloated_notes,
                          hub_nodes, dangling_edges, bare_notes, tagless_notes, stub_notes,

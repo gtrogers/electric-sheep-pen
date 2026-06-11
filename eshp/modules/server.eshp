@@ -1,6 +1,6 @@
 #module #server #web
 
-> HTTP server for the eshp web view. Serves cytoscape.js graph UI and SSE recall events.
+> HTTP server for the eshp web view. Serves cytoscape.js graph UI and SSE activity events (recall + scan).
 
 eshp_server.py — stdlib http.server-based HTTP server (zero extra dependencies).
 
@@ -11,11 +11,13 @@ Routes:
                             NOTE: edges where src or dst has no matching node are silently
                             filtered out — guards against ghost slugs crashing cytoscape
   GET /api/note/<slug>    → JSON: {slug, desc, body, tags, edges_out, edges_in}
-  GET /events             → SSE stream: {"slug": "...", "type": "recall"} on every recall
+  GET /events             → SSE stream: {"slug": "...", "type": "recall"|"scan"} on activity
 
 SSE strategy:
-  Each SSE client opens its own sqlite3 connection and polls last_recalled_at
-  every 500ms. Seeds last_seen on connect to avoid replaying old events.
+  Each SSE client opens its own sqlite3 connection and polls both last_recalled_at
+  and last_scanned_at via UNION query every 500ms.
+  last_seen keyed by (slug, type) — scan and recall tracked independently.
+  Seeds last_seen on connect to avoid replaying old events.
   Broken pipe / ConnectionResetError → clean disconnect.
 
 Thread safety:
