@@ -117,6 +117,29 @@
       pointer-events: none;
     }
 
+    #legend {
+      position: fixed;
+      top: 10px;
+      left: 10px;
+      font-size: 10px;
+      color: #8b949e;
+      pointer-events: none;
+      line-height: 1.6;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .legend-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
     @keyframes pulse-glow {
       0%   { background-color: #f4d03f; border-color: #f39c12; }
       50%  { background-color: #ff8c00; border-color: #ff6600; }
@@ -138,10 +161,59 @@
     <div id="panel-edges"></div>
   </div>
 
+  <div id="legend"></div>
   <div id="status-bar">eshp</div>
 
   <script>
     let cy = null;
+
+    // ── Folder colour palette ────────────────────────────────────────────────
+
+    const FOLDER_PALETTE = [
+      '#7ee787',  // green
+      '#40e0d0',  // teal
+      '#ffa657',  // orange
+      '#d2a8ff',  // purple
+      '#f85149',  // red
+      '#56d364',  // lime
+      '#e3b341',  // gold
+      '#ff7b72',  // coral
+    ];
+
+    function buildFolderStyles(elements) {
+      const folders = [...new Set(
+        elements
+          .filter(e => !e.data.source && e.data.folder)
+          .map(e => e.data.folder)
+      )].sort();
+
+      // Populate legend
+      const legend = document.getElementById('legend');
+      legend.innerHTML = '';
+      folders.forEach((folder, i) => {
+        const color = FOLDER_PALETTE[i % FOLDER_PALETTE.length];
+        const item = document.createElement('div');
+        item.className = 'legend-item';
+        const dot = document.createElement('div');
+        dot.className = 'legend-dot';
+        dot.style.backgroundColor = color;
+        const label = document.createElement('span');
+        label.textContent = folder;
+        item.appendChild(dot);
+        item.appendChild(label);
+        legend.appendChild(item);
+      });
+
+      // Build Cytoscape style rules for each folder.
+      // JSON.stringify provides safe quoting for the attribute selector value.
+      return folders.map((folder, i) => ({
+        selector: `node[folder = ${JSON.stringify(folder)}]`,
+        style: {
+          'background-color': FOLDER_PALETTE[i % FOLDER_PALETTE.length],
+          'border-color': FOLDER_PALETTE[i % FOLDER_PALETTE.length],
+        },
+      }));
+    }
 
     // ── Graph load ───────────────────────────────────────────────────────────
 
@@ -150,28 +222,12 @@
       const res = await fetch('/api/graph');
       const data = await res.json();
 
+      const folderStyles = buildFolderStyles(data.elements);
+
       cy = cytoscape({
         container: document.getElementById('cy'),
         elements: data.elements,
         style: [
-          {
-            selector: 'node[type = "folder"]',
-            style: {
-              'background-color': '#161b22',
-              'background-opacity': 0.6,
-              'border-color': '#30363d',
-              'border-width': 1,
-              'border-style': 'dashed',
-              'label': 'data(label)',
-              'color': '#6e7681',
-              'font-size': '11px',
-              'font-family': 'SFMono-Regular, Consolas, monospace',
-              'text-valign': 'top',
-              'text-halign': 'center',
-              'padding': '24px',
-              'shape': 'roundrectangle',
-            }
-          },
           {
             selector: 'node',
             style: {
@@ -188,6 +244,7 @@
               'border-color': '#388bfd',
             }
           },
+          ...folderStyles,
           {
             selector: 'edge',
             style: {
@@ -233,12 +290,10 @@
           idealEdgeLength: 80,
           edgeElasticity: 100,
           gravity: 1,
-          nestingFactor: 1.2,
         }
       });
 
       cy.on('tap', 'node', e => {
-        if (e.target.data('type') === 'folder') return;
         const slug = e.target.id();
         setStatus(`loading: ${slug}…`);
         showPanel(slug).catch(err => setStatus(`error: ${err.message}`));
@@ -247,7 +302,7 @@
 
       new ResizeObserver(() => cy.resize()).observe(document.getElementById('cy'));
 
-      const count = data.elements.filter(e => !e.data.source && e.data.type !== 'folder').length;
+      const count = data.elements.filter(e => !e.data.source).length;
       setStatus(`${count} notes · ${data.elements.length - count} edges`);
     }
 

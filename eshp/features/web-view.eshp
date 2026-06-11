@@ -41,21 +41,24 @@ Do NOT share the write-side EshpStore with request handlers.
 
 Cytoscape.js data format:
   {"elements": [
-    // Folder compound nodes (one per unique folder prefix in slugs):
-    {"data": {"id": "folder:modules", "label": "modules", "type": "folder"}, "selectable": false},
-    // Note nodes — path-slugs get parent set, label is basename only:
-    {"data": {"id": "modules/cli", "label": "cli", "desc": "...", "parent": "folder:modules"}},
-    // Top-level notes (no "/") have no parent:
-    {"data": {"id": "alpha", "label": "alpha", "desc": "..."}},
+    // Note nodes — all flat (no compound nodes); path-slugs carry a folder field:
+    {"data": {"id": "modules/cli", "label": "modules/cli", "desc": "...", "folder": "modules"}},
+    {"data": {"id": "alpha", "label": "alpha", "desc": "...", "folder": ""}},
     // Edges (unchanged):
     {"data": {"id": "src:rel:dst", "source": "src", "target": "dst", "rel": "rel"}}
   ]}
 
-Folder grouping:
-  Notes with path-slugs (e.g. "modules/cli") are grouped into Cytoscape compound
-  nodes by their immediate parent directory. Folder node IDs use "folder:" prefix
-  to avoid collision with any real note slug. Folder nodes are non-selectable and
-  clicking them does not open the note panel. Uses cose layout with nestingFactor: 1.2.
+Folder grouping (colour-coding):
+  Notes with path-slugs (e.g. "modules/cli") carry a "folder" field in their node data
+  (e.g. folder: "modules"). The frontend assigns each unique folder a colour from a
+  fixed 8-colour palette via dynamic Cytoscape style selectors built before cy init.
+  Selector values use JSON.stringify() for safe quoting. A small legend overlay
+  (top-left, fixed, pointer-events: none) maps folder names to their colours.
+  Top-level notes (folder: "") keep the default blue styling.
+
+  TRAP — CiSE layout not viable: cytoscape-cise 2.x requires cose-base and avsdf-base
+  as external peer deps — it is NOT a single self-contained bundle. Can't be added
+  without bundling three separate JS files.
 
 ZERO new runtime dependencies — http.server + threading are stdlib.
 Cytoscape.js v3.33.4 bundled as eshp/static/cytoscape.min.js. Re-download manually if upgrading.

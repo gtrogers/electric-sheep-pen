@@ -72,28 +72,19 @@ class EshpRequestHandler(BaseHTTPRequestHandler):
             rows = list(conn.execute("SELECT slug, desc FROM notes ORDER BY slug"))
             slugs = {r["slug"] for r in rows}
 
-            # One compound parent node per unique folder prefix (e.g. "modules/cli" → "modules").
-            # IDs use "folder:<path>" to avoid collision with any real note slug.
-            folders = sorted({r["slug"].rsplit("/", 1)[0] for r in rows if "/" in r["slug"]})
-            folder_nodes = [
+            # Include folder prefix in node data so the frontend can colour-code by folder.
+            # Top-level notes (no "/") get folder = "".
+            nodes = [
                 {
-                    "data": {"id": f"folder:{f}", "label": f, "type": "folder"},
-                    "selectable": False,
+                    "data": {
+                        "id": r["slug"],
+                        "label": r["slug"],
+                        "desc": r["desc"] or "",
+                        "folder": r["slug"].rsplit("/", 1)[0] if "/" in r["slug"] else "",
+                    }
                 }
-                for f in folders
+                for r in rows
             ]
-
-            # Note nodes — labels use only the basename for readability inside compound nodes.
-            nodes = []
-            for r in rows:
-                data: dict = {
-                    "id": r["slug"],
-                    "label": r["slug"].split("/")[-1],
-                    "desc": r["desc"] or "",
-                }
-                if "/" in r["slug"]:
-                    data["parent"] = f"folder:{r['slug'].rsplit('/', 1)[0]}"
-                nodes.append({"data": data})
 
             edges = [
                 {
@@ -109,7 +100,7 @@ class EshpRequestHandler(BaseHTTPRequestHandler):
             ]
         finally:
             conn.close()
-        self._send_json({"elements": folder_nodes + nodes + edges})
+        self._send_json({"elements": nodes + edges})
 
     def _api_note(self, slug: str):
         conn = self._open_db()
