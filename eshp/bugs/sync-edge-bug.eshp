@@ -55,5 +55,5 @@ declarer dropping the edge, dual-declaration, and sync-order independence.
 .fixed-in
 -> modules/store
 
-.documented-in
+.references
 -> design/edge-direction

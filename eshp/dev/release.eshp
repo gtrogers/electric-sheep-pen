@@ -12,12 +12,7 @@ the 4-skill workflow, file format, command tables, and development setup.
 User-facing install (requires Python 3.11+):
   pipx install git+https://github.com/gtrogers/electric-sheep-pen.git
 
-PENDING: GitHub remote has not been set up yet.
-  git remote add origin git@github.com:gtrogers/electric-sheep-pen.git
-  git push -u origin main
-  Update README and pyproject.toml if the repo name differs.
-
-Not yet on PyPI — install from GitHub for now.
+GitHub remote: git@github.com:gtrogers/electric-sheep-pen.git (set up, not yet pushed to PyPI).
 
 .paired-with
 -> dev/dev-workflow
