@@ -155,6 +155,24 @@
         elements: data.elements,
         style: [
           {
+            selector: 'node[type = "folder"]',
+            style: {
+              'background-color': '#161b22',
+              'background-opacity': 0.6,
+              'border-color': '#30363d',
+              'border-width': 1,
+              'border-style': 'dashed',
+              'label': 'data(label)',
+              'color': '#6e7681',
+              'font-size': '11px',
+              'font-family': 'SFMono-Regular, Consolas, monospace',
+              'text-valign': 'top',
+              'text-halign': 'center',
+              'padding': '24px',
+              'shape': 'roundrectangle',
+            }
+          },
+          {
             selector: 'node',
             style: {
               'background-color': '#1f6feb',
@@ -215,10 +233,12 @@
           idealEdgeLength: 80,
           edgeElasticity: 100,
           gravity: 1,
+          nestingFactor: 1.2,
         }
       });
 
       cy.on('tap', 'node', e => {
+        if (e.target.data('type') === 'folder') return;
         const slug = e.target.id();
         setStatus(`loading: ${slug}…`);
         showPanel(slug).catch(err => setStatus(`error: ${err.message}`));
@@ -227,7 +247,7 @@
 
       new ResizeObserver(() => cy.resize()).observe(document.getElementById('cy'));
 
-      const count = data.elements.filter(e => !e.data.source).length;
+      const count = data.elements.filter(e => !e.data.source && e.data.type !== 'folder').length;
       setStatus(`${count} notes · ${data.elements.length - count} edges`);
     }
 

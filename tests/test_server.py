@@ -143,6 +143,86 @@ class TestApiGraph:
             http.shutdown()
             s.close()
 
+    # ── compound / folder node tests ─────────────────────────────────────────
+
+    def _note_elements(self, data):
+        """Elements that are real note nodes (not edges, not folder nodes)."""
+        return [e for e in data["elements"]
+                if "source" not in e["data"] and e["data"].get("type") != "folder"]
+
+    def _folder_elements(self, data):
+        return [e for e in data["elements"] if e["data"].get("type") == "folder"]
+
+    def test_path_slug_has_parent(self, server):
+        base, _ = server
+        _, data = get_json(base + "/api/graph")
+        parser_node = next(e["data"] for e in data["elements"]
+                           if e["data"].get("id") == "modules/parser")
+        assert parser_node.get("parent") == "folder:modules"
+
+    def test_folder_node_present(self, server):
+        base, _ = server
+        _, data = get_json(base + "/api/graph")
+        folder_ids = {e["data"]["id"] for e in self._folder_elements(data)}
+        assert "folder:modules" in folder_ids
+
+    def test_folder_node_has_type_folder(self, server):
+        base, _ = server
+        _, data = get_json(base + "/api/graph")
+        folder = next(e for e in data["elements"]
+                      if e["data"].get("id") == "folder:modules")
+        assert folder["data"]["type"] == "folder"
+
+    def test_folder_node_is_not_selectable(self, server):
+        base, _ = server
+        _, data = get_json(base + "/api/graph")
+        folder = next(e for e in data["elements"]
+                      if e["data"].get("id") == "folder:modules")
+        assert folder.get("selectable") is False
+
+    def test_top_level_node_has_no_parent(self, server):
+        base, _ = server
+        _, data = get_json(base + "/api/graph")
+        alpha = next(e["data"] for e in data["elements"]
+                     if e["data"].get("id") == "alpha")
+        assert "parent" not in alpha
+
+    def test_node_label_is_basename(self, server):
+        base, _ = server
+        _, data = get_json(base + "/api/graph")
+        parser_node = next(e["data"] for e in data["elements"]
+                           if e["data"].get("id") == "modules/parser")
+        assert parser_node["label"] == "parser"
+
+    def test_one_folder_node_per_folder(self, server):
+        """Two notes in the same folder → exactly one folder node."""
+        base, store = server
+        store.upsert_note(_note("modules/store", desc="Store note"))
+        store.conn.commit()
+        _, data = get_json(base + "/api/graph")
+        modules_folders = [e for e in data["elements"]
+                           if e["data"].get("id") == "folder:modules"]
+        assert len(modules_folders) == 1
+
+    def test_top_level_only_graph_has_no_folder_nodes(self, tmp_path):
+        """A graph with only top-level (non-path) slugs emits no folder nodes."""
+        s = EshpStore(tmp_path)
+        s.upsert_note(_note("alpha", desc="Alpha"))
+        s.upsert_note(_note("beta", desc="Beta"))
+        s.conn.commit()
+        http = make_server(tmp_path, host="127.0.0.1", port=0)
+        port = http.server_address[1]
+        t = threading.Thread(target=http.serve_forever, daemon=True)
+        t.start()
+        try:
+            _, data = get_json(f"http://127.0.0.1:{port}/api/graph")
+            folder_nodes = [e for e in data["elements"]
+                            if e["data"].get("type") == "folder"]
+            assert folder_nodes == []
+        finally:
+            http.shutdown()
+            s.close()
+
 
 # ── /api/note/<slug> ──────────────────────────────────────────────────────────
 

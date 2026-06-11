@@ -69,11 +69,32 @@ class EshpRequestHandler(BaseHTTPRequestHandler):
     def _api_graph(self):
         conn = self._open_db()
         try:
-            nodes = [
-                {"data": {"id": r["slug"], "label": r["slug"], "desc": r["desc"] or ""}}
-                for r in conn.execute("SELECT slug, desc FROM notes ORDER BY slug")
+            rows = list(conn.execute("SELECT slug, desc FROM notes ORDER BY slug"))
+            slugs = {r["slug"] for r in rows}
+
+            # One compound parent node per unique folder prefix (e.g. "modules/cli" → "modules").
+            # IDs use "folder:<path>" to avoid collision with any real note slug.
+            folders = sorted({r["slug"].rsplit("/", 1)[0] for r in rows if "/" in r["slug"]})
+            folder_nodes = [
+                {
+                    "data": {"id": f"folder:{f}", "label": f, "type": "folder"},
+                    "selectable": False,
+                }
+                for f in folders
             ]
-            slugs = {n["data"]["id"] for n in nodes}
+
+            # Note nodes — labels use only the basename for readability inside compound nodes.
+            nodes = []
+            for r in rows:
+                data: dict = {
+                    "id": r["slug"],
+                    "label": r["slug"].split("/")[-1],
+                    "desc": r["desc"] or "",
+                }
+                if "/" in r["slug"]:
+                    data["parent"] = f"folder:{r['slug'].rsplit('/', 1)[0]}"
+                nodes.append({"data": data})
+
             edges = [
                 {
                     "data": {
@@ -88,7 +109,7 @@ class EshpRequestHandler(BaseHTTPRequestHandler):
             ]
         finally:
             conn.close()
-        self._send_json({"elements": nodes + edges})
+        self._send_json({"elements": folder_nodes + nodes + edges})
 
     def _api_note(self, slug: str):
         conn = self._open_db()

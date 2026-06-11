@@ -41,9 +41,21 @@ Do NOT share the write-side EshpStore with request handlers.
 
 Cytoscape.js data format:
   {"elements": [
-    {"data": {"id": "slug", "label": "slug", "desc": "..."}},
+    // Folder compound nodes (one per unique folder prefix in slugs):
+    {"data": {"id": "folder:modules", "label": "modules", "type": "folder"}, "selectable": false},
+    // Note nodes — path-slugs get parent set, label is basename only:
+    {"data": {"id": "modules/cli", "label": "cli", "desc": "...", "parent": "folder:modules"}},
+    // Top-level notes (no "/") have no parent:
+    {"data": {"id": "alpha", "label": "alpha", "desc": "..."}},
+    // Edges (unchanged):
     {"data": {"id": "src:rel:dst", "source": "src", "target": "dst", "rel": "rel"}}
   ]}
+
+Folder grouping:
+  Notes with path-slugs (e.g. "modules/cli") are grouped into Cytoscape compound
+  nodes by their immediate parent directory. Folder node IDs use "folder:" prefix
+  to avoid collision with any real note slug. Folder nodes are non-selectable and
+  clicking them does not open the note panel. Uses cose layout with nestingFactor: 1.2.
 
 ZERO new runtime dependencies — http.server + threading are stdlib.
 Cytoscape.js v3.33.4 bundled as eshp/static/cytoscape.min.js. Re-download manually if upgrading.
