@@ -12,9 +12,3 @@ Four-module design. Each module has a single responsibility and no upward depend
 Data flows one way: .eshp file → parse_eshp() → EshpNote → store.upsert_note() → SQLite.
 The CLI is the only layer allowed to call both parser and store together.
 The server reads from SQLite directly (never through EshpStore) — own connection per request.
-
-.contains
--> modules/parser
--> modules/store
--> modules/cli
--> modules/server
