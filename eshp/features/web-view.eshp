@@ -2,66 +2,40 @@
 
 > Web view feature for the eshp memory graph — BUILT. Run with `eshp serve`.
 
-## Traps found during implementation
+## Traps
 
-TRAP — ThreadingHTTPServer required (see server note for detail):
+TRAP — ThreadingHTTPServer required:
   HTTPServer is single-threaded. SSE blocks it entirely. Use ThreadingHTTPServer.
 
 TRAP — Cytoscape canvas overflow covers side panel:
-  Cytoscape initialises its canvas to the container's pixel size at creation time.
-  When the flexbox layout shifts (e.g. panel opens), the canvas stays full-width
-  and overflows the container, visually covering the side panel.
-  Fix: `overflow: hidden` on `#cy` + a `ResizeObserver` calling `cy.resize()` when
-  the container changes size. Do NOT use requestAnimationFrame — layout hasn't
-  updated yet when it fires.
+  Cytoscape fixes canvas size at creation time. When the panel opens the flexbox
+  shifts and the canvas overflows. Fix: `overflow: hidden` on `#cy` + ResizeObserver
+  calling `cy.resize()`. Do NOT use requestAnimationFrame — layout hasn't settled yet.
 
 TRAP — record_recall must be called from every discovery command:
-  SSE recall highlights only fire when record_recall() is called. Initially only
-  `eshp recall` called it; `eshp scan` did not, so scan activity was invisible
-  in the web view. Both commands now call record_recall for each result.
+  SSE recall highlights only fire when record_recall() is called. Both `eshp recall`
+  and `eshp scan` must call it; forgetting scan makes scan activity invisible.
 
-## Architecture (built)
+TRAP — CiSE layout not viable:
+  cytoscape-cise 2.x requires cose-base and avsdf-base as external peer deps —
+  NOT a self-contained bundle. Would need three separate JS files bundled.
+
+## Architecture
 
   eshp serve [--port 7842] [--host 127.0.0.1] [--root PATH] [--no-browser]
 
-Starts ThreadingHTTPServer in a daemon thread + watchdog observer in main thread.
-Static files: eshp/static/index.html (SPA), eshp/static/cytoscape.min.js (bundled v3.33.4).
+Static files: eshp/static/index.html (SPA), eshp/static/cytoscape.min.js (v3.33.4, no CDN).
+ZERO new Python runtime dependencies — http.server + threading are stdlib.
+Full API surface documented in modules/server.
 
-API surface:
-  GET /                   → index.html
-  GET /cytoscape.min.js   → bundled cytoscape.js (v3.33.4, no CDN — supply chain safety)
-  GET /api/graph          → {elements: [...]} in cytoscape format (all notes + edges)
-  GET /api/note/<slug>    → {slug, desc, body, tags, edges_out, edges_in}
-  GET /events             → SSE stream: {"slug": "...", "type": "recall"} on recall
+/api/graph node format:
+  {"data": {"id": "modules/cli", "label": "modules/cli", "desc": "...", "folder": "modules"}}
+  {"data": {"id": "alpha", "label": "alpha", "desc": "...", "folder": ""}}
 
-SSE strategy: each client polls last_recalled_at via its own sqlite3 connection every 500ms.
-Seeds last_seen on connect to avoid replaying old events. Broken pipe = clean disconnect.
-Thread safety: each request handler opens a fresh sqlite3.connect(check_same_thread=False).
-Do NOT share the write-side EshpStore with request handlers.
-
-Cytoscape.js data format:
-  {"elements": [
-    // Note nodes — all flat (no compound nodes); path-slugs carry a folder field:
-    {"data": {"id": "modules/cli", "label": "modules/cli", "desc": "...", "folder": "modules"}},
-    {"data": {"id": "alpha", "label": "alpha", "desc": "...", "folder": ""}},
-    // Edges (unchanged):
-    {"data": {"id": "src:rel:dst", "source": "src", "target": "dst", "rel": "rel"}}
-  ]}
-
-Folder grouping (colour-coding):
-  Notes with path-slugs (e.g. "modules/cli") carry a "folder" field in their node data
-  (e.g. folder: "modules"). The frontend assigns each unique folder a colour from a
-  fixed 8-colour palette via dynamic Cytoscape style selectors built before cy init.
-  Selector values use JSON.stringify() for safe quoting. A small legend overlay
-  (top-left, fixed, pointer-events: none) maps folder names to their colours.
-  Top-level notes (folder: "") keep the default blue styling.
-
-  TRAP — CiSE layout not viable: cytoscape-cise 2.x requires cose-base and avsdf-base
-  as external peer deps — it is NOT a single self-contained bundle. Can't be added
-  without bundling three separate JS files.
-
-ZERO new runtime dependencies — http.server + threading are stdlib.
-Cytoscape.js v3.33.4 bundled as eshp/static/cytoscape.min.js. Re-download manually if upgrading.
+Folder grouping: nodes carry a "folder" field (rsplit path prefix, "" for top-level).
+Frontend builds per-folder Cytoscape style selectors from an 8-colour palette before
+cy init; selector values are quoted with JSON.stringify() to handle special characters.
+A small fixed legend (top-left) maps folder names to colours.
 
 .part-of
 -> modules/architecture
